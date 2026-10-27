@@ -3,24 +3,28 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.25.0",
-  "engines": { "node": ">=24 <25" },
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "build": "tsx scripts/build.ts",
     "build:server": "tsx scripts/build.ts --server-only",
     "dev": "tsx watch packages/daemon/src/cli.ts start --dev",
     "dev:web": "pnpm --filter @agentwatch/web dev",
     "agentwatch": "node packages/daemon/dist/cli.js",
-    "test": "vitest run",
+    "test": "pnpm build:server && vitest run",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.check.json",
     "format:check": "prettier --check packages scripts tests",
     "format": "prettier --write packages scripts tests"
   },
   "devDependencies": {
+    "@hono/node-server": "^2.1.5",
     "@playwright/test": "latest",
     "@types/better-sqlite3": "latest",
     "@types/node": "^24.0.0",
     "esbuild": "latest",
+    "hono": "^4.13.14",
     "prettier": "latest",
     "tsx": "latest",
     "typescript": "~5.9.3",
