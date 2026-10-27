@@ -11,3 +11,6 @@ test-results/
 .vitest/
 *.agentwatch-lock.sqlite*
 .env*
+
+# Locally generated knowledge graphs and extraction caches.
+graphify-out/
