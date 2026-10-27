@@ -8,6 +8,7 @@ type Cursor = {
   pendingOffset: number;
   skipping: boolean;
   checkpoint: Buffer;
+  bootstrapEnd: number;
 };
 export type LineInfo = {
   path: string;
@@ -45,12 +46,10 @@ export class JsonlTailer {
       const inode = `${st.dev}:${st.ino}:${st.birthtimeMs}`;
       let c = this.cursors.get(path);
       if (!c || c.inode !== inode || st.size < c.offset) {
-        const start = !live
-          ? Math.max(
-              0,
-              st.size - (this.options.bootstrapBytes ?? 2 * 1024 * 1024),
-            )
-          : 0;
+        const start = Math.max(
+          0,
+          st.size - (this.options.bootstrapBytes ?? 2 * 1024 * 1024),
+        );
         c = {
           inode,
           offset: start,
@@ -58,6 +57,7 @@ export class JsonlTailer {
           pendingOffset: start,
           skipping: start > 0,
           checkpoint: Buffer.alloc(0),
+          bootstrapEnd: st.size,
         };
         this.cursors.set(path, c);
       }
@@ -71,10 +71,14 @@ export class JsonlTailer {
           c.offset - previousTail.length,
         );
         if (!previousTail.equals(c.checkpoint)) {
-          c.offset = 0;
+          c.offset = Math.max(
+            0,
+            st.size - (this.options.bootstrapBytes ?? 2 * 1024 * 1024),
+          );
           c.pending = Buffer.alloc(0);
-          c.pendingOffset = 0;
-          c.skipping = false;
+          c.pendingOffset = c.offset;
+          c.skipping = c.offset > 0;
+          c.bootstrapEnd = st.size;
         }
       }
       const max = this.options.maxLineBytes ?? 2 * 1024 * 1024;
@@ -108,7 +112,7 @@ export class JsonlTailer {
               this.onLine(raw, {
                 path,
                 id: `log:${hash}:${offset}`,
-                live,
+                live: live && offset >= c.bootstrapEnd,
                 offset,
               });
             } catch {

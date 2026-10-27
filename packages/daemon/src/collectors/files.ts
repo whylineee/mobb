@@ -23,6 +23,7 @@ export class FileCollectors {
   private dropped = new Map<Provider, number>();
   private timer?: ReturnType<typeof setInterval>;
   private closed = false;
+  private startedAt = Date.now();
   private roots: Record<Provider, string>;
 
   constructor(
@@ -58,11 +59,17 @@ export class FileCollectors {
       if (typeof p.id === "string") context.sessionId = p.id;
     }
     if (d && typeof d.sessionId === "string") context.sessionId = d.sessionId;
+    const recordTime =
+      typeof d?.timestamp === "string" ? Date.parse(d.timestamp) : NaN;
     const meta = {
       id: info.id,
       observedAt: Date.now(),
       sessionId: context.sessionId,
-      live: info.live,
+      live:
+        info.live &&
+        Number.isFinite(recordTime) &&
+        recordTime >= this.startedAt &&
+        recordTime <= Date.now() + 5000,
     };
     const events =
       context.provider === "codex"

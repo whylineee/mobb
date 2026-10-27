@@ -199,10 +199,10 @@ export function normalizeCodexRecord(
     return emit("session.metadata", {
       cwd: str(p.cwd),
       gitBranch: str(git.branch),
-      origin: /desktop/i.test(String(p.originator))
-        ? "desktop"
-        : p.source === "cli"
-          ? "cli"
+      origin: ["cli", "exec"].includes(String(p.source))
+        ? "cli"
+        : /desktop/i.test(String(p.originator))
+          ? "desktop"
           : "unknown",
       parentSessionId: str(subagent.parent_thread_id),
     });
@@ -267,7 +267,12 @@ export function normalizeClaudeRecord(
   };
   const content = msg.content;
   const result: AgentEvent[] = [];
-  if (raw.type === "user" && typeof content === "string" && !raw.isMeta) {
+  if (
+    raw.type === "user" &&
+    typeof content === "string" &&
+    !raw.isMeta &&
+    !raw.isSidechain
+  ) {
     return event(
       "claude",
       sessionId,

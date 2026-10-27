@@ -17,7 +17,8 @@ import {
 } from "lucide-react";
 import type { AgentEvent, Session } from "@agentwatch/shared";
 import { useTelemetry, telemetryStore } from "../lib/store";
-import { sessionEvents } from "../lib/client";
+import { sessionDetails, sessionEvents } from "../lib/client";
+import { mergeDetails } from "../lib/details";
 import { agentName, relativeTime, Status } from "./Status";
 
 const eventLabels: Record<AgentEvent["kind"], string> = {
@@ -159,12 +160,13 @@ function TimelineEvent({ event }: { event: AgentEvent }) {
 }
 
 export default function SessionPanel({
-  session,
+  session: summary,
   token,
 }: {
   session: Session;
   token: string;
 }) {
+  const [fullDetails, setFullDetails] = useState<Session | null>(null);
   const [tab, setTab] = useState<"overview" | "activity" | "details">(
     "overview",
   );
@@ -173,6 +175,23 @@ export default function SessionPanel({
   const syncVersion = useTelemetry((s) => s.syncVersion),
     events = useTelemetry((s) => s.events),
     nextCursor = useTelemetry((s) => s.nextCursor);
+  const session = mergeDetails(summary, fullDetails);
+  useEffect(() => {
+    const controller = new AbortController();
+    void sessionDetails(summary.key, token, controller.signal)
+      .then((details) => {
+        if (!controller.signal.aborted) setFullDetails(details);
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [
+    summary.key,
+    summary.stateAt,
+    summary.lastObservedAt,
+    summary.revision,
+    token,
+    syncVersion,
+  ]);
   const close = () => telemetryStore.getState().select(null);
   const scroll = useRef<HTMLDivElement>(null),
     closeButton = useRef<HTMLButtonElement>(null);
