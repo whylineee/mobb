@@ -49,14 +49,37 @@ describe("session truth", () => {
     expect(a.activity).toBe("idle");
     expect(a.task?.text).toBe("Fix parser");
   });
-  it("removes a confirmed ended robot after 60 seconds while preserving its session", () => {
+  it("shows only confirmed live work and removes robots when the task stops", () => {
+    let session = reduceSession(undefined, hook("SessionStart"));
+    expect(visibleInOffice(session)).toBe(false);
+    session = reduceSession(
+      session,
+      hook("UserPromptSubmit", { prompt: "Current work" }, 1100),
+    );
+    expect(visibleInOffice(session)).toBe(true);
+    expect(visibleInOffice({ ...session, lifecycle: "unknown" })).toBe(false);
+    expect(visibleInOffice({ ...session, freshness: "stale" })).toBe(false);
+    expect(visibleInOffice({ ...session, freshness: "unavailable" })).toBe(
+      false,
+    );
+    session = reduceSession(
+      session,
+      hook("Notification", { notification_type: "permission_prompt" }, 1200),
+    );
+    expect(session.activity).toBe("waiting");
+    expect(visibleInOffice(session)).toBe(true);
+    session = reduceSession(session, hook("Stop", {}, 1300));
+    expect(visibleInOffice(session)).toBe(false);
+    expect(session.lifecycle).toBe("open");
+  });
+  it("removes a confirmed ended robot immediately while preserving its session", () => {
     const s = reduceSession(
       reduceSession(undefined, hook("SessionStart")),
       hook("SessionEnd", {}, 2000),
     );
     expect(s.lifecycle).toBe("ended");
-    expect(visibleInOffice(s, 61999)).toBe(true);
-    expect(visibleInOffice(s, 62000)).toBe(false);
+    expect(visibleInOffice(s)).toBe(false);
+    expect(s.key).toBe("codex:s1");
   });
   it("does not regress a newer turn or resurrect an ended session with a late tool event", () => {
     let s = reduceSession(
@@ -163,6 +186,7 @@ describe("session truth", () => {
     );
     expect(s.lifecycle).toBe("unknown");
     expect(sessionStatus(s)).toBe("unknown");
+    expect(visibleInOffice(s)).toBe(false);
     s = reduceSession(
       s,
       normalizeCodexRecord(
@@ -180,6 +204,7 @@ describe("session truth", () => {
       )[0]!,
     );
     expect(sessionStatus(s)).toBe("unknown");
+    expect(visibleInOffice(s)).toBe(false);
     expect(s.origin).toBe("desktop");
     s = reduceSession(
       s,

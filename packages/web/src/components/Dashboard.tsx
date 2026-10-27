@@ -153,8 +153,8 @@ export default function Dashboard() {
   }, [unavailable]);
 
   const visible = useMemo(
-    () => Object.values(sessions).filter((s) => officeVisible(s, now)),
-    [sessions, now],
+    () => Object.values(sessions).filter(officeVisible),
+    [sessions],
   );
   const selected = selectedKey ? sessions[selectedKey] : undefined;
   const selectSession = useCallback(
@@ -226,7 +226,9 @@ export default function Dashboard() {
       {visible.length === 0 && !listOpen && connection === "online" && (
         <div className="office-empty-note" role="status">
           <strong>Офіс поки порожній</strong>
-          <span>Запустіть Claude Code або Codex — агент займе своє місце.</span>
+          <span>
+            Дайте задачу Claude Code або Codex — активна сесія з’явиться тут.
+          </span>
         </div>
       )}
       {(connection !== "online" || omittedSessions > 0) && (
@@ -268,7 +270,7 @@ export default function Dashboard() {
             <SessionList sessions={visible} now={now} />
           ) : (
             <p className="office-list-message">
-              Офіс поки порожній. Запустіть Claude Code або Codex.
+              Офіс поки порожній. Запустіть задачу в Claude Code або Codex.
             </p>
           )}
         </section>
