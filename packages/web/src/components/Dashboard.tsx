@@ -8,6 +8,7 @@ import {
   Bot,
   ChevronDown,
   CircleHelp,
+  Info,
   Code2,
   Coffee,
   Folder,
@@ -143,7 +144,8 @@ export default function Dashboard() {
   const sessions = useTelemetry((s) => s.sessions),
     selectedKey = useTelemetry((s) => s.selectedKey),
     connection = useTelemetry((s) => s.connection),
-    collectors = useTelemetry((s) => s.collectors);
+    collectors = useTelemetry((s) => s.collectors),
+    omittedSessions = useTelemetry((s) => s.omittedSessions);
   useEffect(() => {
     setToken(bootstrapToken());
     setNow(Date.now());
@@ -541,6 +543,15 @@ export default function Dashboard() {
                 </span>
               </div>
             </div>
+            {omittedSessions > 0 && (
+              <div className="connection-banner">
+                <Info size={15} />
+                <span>
+                  Огляд обмежено 200 сесіями. Ще {omittedSessions} збережено
+                  локально; відкриті сесії мають пріоритет.
+                </span>
+              </div>
+            )}
             {connection === "offline" && (
               <div className="connection-banner">
                 <WifiOff size={15} />

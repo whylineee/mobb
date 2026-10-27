@@ -6,7 +6,9 @@ import {
   renameSync,
   unlinkSync,
   writeFileSync,
+  chmodSync,
 } from "node:fs";
+import Database from "better-sqlite3";
 import { dirname, join } from "node:path";
 import type { Provider, RuntimeConfig } from "@agentwatch/shared";
 import { writePrivateJson } from "./config.js";
@@ -99,7 +101,30 @@ function previousSignatures(o: Options): string[] {
     .signatures;
 }
 
+function withConfigurationLock(o: Options, operation: () => void): void {
+  mkdirSync(dirname(o.configPath), { recursive: true, mode: 0o700 });
+  const lockPath = o.configPath + ".agentwatch-lock.sqlite";
+  const db = new Database(lockPath);
+  chmodSync(lockPath, 0o600);
+  db.pragma("busy_timeout = 5000");
+  try {
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      operation();
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+  } finally {
+    db.close();
+  }
+}
+
 export async function installHooks(o: Options): Promise<void> {
+  withConfigurationLock(o, () => installUnderLock(o));
+}
+function installUnderLock(o: Options): void {
   const { raw, settings } = readSettings(o.configPath),
     old = previousSignatures(o);
   removeOwned(settings, old);
@@ -140,6 +165,9 @@ export async function installHooks(o: Options): Promise<void> {
 }
 
 export async function uninstallHooks(o: Options): Promise<void> {
+  withConfigurationLock(o, () => uninstallUnderLock(o));
+}
+function uninstallUnderLock(o: Options): void {
   const signatures = previousSignatures(o);
   if (!signatures.length || !existsSync(o.configPath)) return;
   const { raw, settings } = readSettings(o.configPath);

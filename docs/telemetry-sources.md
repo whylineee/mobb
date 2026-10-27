@@ -20,6 +20,7 @@ Baseline inspected on 2026-10-27: Node 24.22.1, Codex CLI 0.164.0, Codex desktop
 ## Collection behavior
 
 - JSONL tailing buffers partial UTF-8 lines, bounds records, resumes offsets, detects rotation, truncation and in-place rewrites. Startup reads at most the last 2 MiB per file, plus identity metadata for large Codex rollouts. This is recovery, not a complete import of old transcripts.
+- Existing bytes in every newly discovered or replaced file are historical, even after the watcher is ready. Only later appends with valid timestamps after collector startup can establish log-based liveness. Hooks remain the immediate source for a newly created session.
 - File changes are watched with chokidar. Runtime processes are sampled every second; transcript errors cannot stop other collectors.
 - Native CLI ancestor capture is attempted at `SessionStart`. Node wrappers or a shared daemon can prevent exact attribution; metrics then remain absent.
 - Hooks run asynchronously where supported, with one-second outer timeout and 250 ms HTTP deadline. `SessionEnd` is synchronous. CLI stdout is always `{}`; no policy output is generated.
@@ -38,3 +39,13 @@ Baseline inspected on 2026-10-27: Node 24.22.1, Codex CLI 0.164.0, Codex desktop
 The suite exercises distinct sessions, resume, compaction, delayed and parallel calls, correlated-source enrichment, retention, restart, bounded UTF-8 tailing, scoped hook ownership, authentication, SSE recovery and slow consumers. Browser tests exercise both views, 20 robots, selection, full-text expansion, scroll preservation, end visibility, reconnect, WebGL fallback and observed-event latency.
 
 The FPS benchmark uses Chromium's SwiftShader software renderer in this environment, with automatic quality adaptation. Results are measurements of that run, not a hardware-independent performance guarantee. Bare Node startup measured during planning was 18–31 ms; that is not a full hook latency measurement.
+
+## Delivery checks on the local machine
+
+- Setup installed owned hooks for both providers while preserving existing entries; doctor detected Codex 0.164.0 and Claude Code 2.1.310.
+- Real `codex exec --json` returned `AGENTWATCH_OK` successfully in about 7 seconds. Its rollout was observed through the log collector. It reported `source: exec` with inherited `originator: Codex Desktop`; explicit source takes precedence in the adapter.
+- The compiled hook CLI delivered a real local smoke event in 65 ms, returned exactly `{}`, and its session was then explicitly ended.
+- The already-running shared Codex daemon had not reloaded the new hook configuration during the first check. AgentWatch does not restart agents to force configuration reload.
+- A later isolated `codex --disable daemon_auto_start exec` run completed in 6.4 seconds and was observed through both hooks and logs, including its prompt and confirmed session end. This command-line override did not restart existing agents or change persistent Codex settings.
+- The active Codex desktop session subsequently also supplied hooks and log events, confirming desktop telemetry on this machine.
+- Real Claude Code invocation returned `Not logged in · Please run /login`. Authenticated Claude live verification remains dependent on user login; schema and fixture integration tests pass independently.

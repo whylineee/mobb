@@ -97,6 +97,7 @@ export type ToolCall = {
   endedAt?: number;
 };
 export type Subagent = {
+  updatedAt?: number;
   id: string;
   type?: string;
   task?: string;
@@ -110,6 +111,9 @@ export type ProcessBinding = {
   memoryBytes?: number;
 };
 export type Session = {
+  revision?: number;
+  isSummary?: boolean;
+  activeToolCount?: number;
   key: string;
   sessionId: string;
   provider: Provider;
@@ -131,6 +135,7 @@ export type Session = {
   turnStartedAt?: number;
   task?: { text: string; source: AgentEvent["source"]; updatedAt: number };
   activeTools: ToolCall[];
+  completedToolIds?: string[];
   lastTool?: ToolCall;
   subagents: Subagent[];
   process?: ProcessBinding;
@@ -146,12 +151,14 @@ export type CollectorHealth = {
   droppedEvents: number;
 };
 export type StateSnapshot = {
+  omittedSessions?: number;
   revision: number;
   sessions: Session[];
   collectors: CollectorHealth[];
   serverTime: number;
 };
 export type StateDelta = {
+  omittedSessions?: number;
   revision: number;
   session?: Session;
   event?: AgentEvent;

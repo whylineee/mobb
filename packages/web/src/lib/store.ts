@@ -19,6 +19,7 @@ type WatchState = {
   connection: "connecting" | "online" | "offline" | "unauthorized";
   needsResync: boolean;
   syncVersion: number;
+  omittedSessions: number;
   applySnapshot: (snapshot: StateSnapshot) => void;
   applyDelta: (delta: StateDelta) => void;
   select: (key: string | null) => void;
@@ -44,6 +45,7 @@ export function createTelemetryStore() {
     connection: "connecting",
     needsResync: false,
     syncVersion: 0,
+    omittedSessions: 0,
     applySnapshot(snapshot) {
       set((state) => {
         const sessions = Object.fromEntries(
@@ -62,6 +64,7 @@ export function createTelemetryStore() {
           connection: "online",
           needsResync: false,
           syncVersion: state.syncVersion + 1,
+          omittedSessions: snapshot.omittedSessions ?? 0,
         };
       });
     },
@@ -80,10 +83,27 @@ export function createTelemetryStore() {
         if (delta.session) sessions[delta.session.key] = delta.session;
         for (const key of delta.removedKeys ?? [])
           if (key !== state.selectedKey) delete sessions[key];
+        const keys = Object.keys(sessions);
+        if (keys.length > 201) {
+          const keep = new Set(
+            Object.values(sessions)
+              .sort(
+                (a, b) =>
+                  Number(b.lifecycle === "open") -
+                    Number(a.lifecycle === "open") ||
+                  b.lastObservedAt - a.lastObservedAt,
+              )
+              .slice(0, 200)
+              .map((s) => s.key),
+          );
+          if (state.selectedKey) keep.add(state.selectedKey);
+          for (const key of keys) if (!keep.has(key)) delete sessions[key];
+        }
         return {
           sessions,
           revision: delta.revision,
           collectors: delta.collectors ?? state.collectors,
+          omittedSessions: delta.omittedSessions ?? state.omittedSessions,
           events:
             delta.event && delta.event.sessionKey === state.selectedKey
               ? mergeEvents(state.events, [delta.event])

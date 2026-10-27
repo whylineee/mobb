@@ -35,6 +35,38 @@ export function reduceSession(
       };
   s.lastObservedAt = Math.max(s.lastObservedAt, event.observedAt);
   if (!s.sources.includes(event.source)) s.sources.push(event.source);
+  const subagentEvent =
+    event.kind === "subagent.start" || event.kind === "subagent.end";
+  if (subagentEvent || (d.subagentId && d.subagentId !== event.sessionId)) {
+    const id = subagentEvent ? d.agentId : d.subagentId;
+    if (id) {
+      let child = s.subagents.find((a) => a.id === id);
+      if (!child) {
+        child = { id, activity: "unknown", updatedAt: 0 };
+        s.subagents.push(child);
+      }
+      if (d.agentType) child.type ??= d.agentType;
+      if (d.childSessionId)
+        child.sessionKey = `${event.provider}:${d.childSessionId}`;
+      if (at >= (child.updatedAt ?? 0)) {
+        child.updatedAt = at;
+        if (d.task) child.task = d.task;
+        if (event.kind === "subagent.end" || event.kind === "turn.end")
+          child.activity = "idle";
+        else if (event.kind === "attention") child.activity = "waiting";
+        else if (
+          ["subagent.start", "turn.start", "tool.start", "tool.end"].includes(
+            event.kind,
+          )
+        )
+          child.activity = "working";
+      }
+      if (s.lifecycle !== "ended" && (event.source === "hook" || d.confirmed))
+        s.lifecycle = "open";
+      s.lastActivityAt = Math.max(s.lastActivityAt, at);
+    }
+    return s;
+  }
   // Metadata may enrich recovered sessions, but must not overwrite a newer cwd.
   if (d.gitBranch && (!s.gitBranch || at >= s.stateAt))
     s.gitBranch = d.gitBranch;
@@ -44,6 +76,14 @@ export function reduceSession(
     s.project = projectName(d.cwd);
   }
   if (event.kind === "session.metadata") return s;
+  const sameTurn =
+    !event.turnId || !s.activeTurnId || event.turnId === s.activeTurnId;
+  const rememberCompletion = () => {
+    if (event.callId && sameTurn)
+      s.completedToolIds = [
+        ...new Set([...(s.completedToolIds ?? []), event.callId]),
+      ].slice(-2048);
+  };
   if (at < s.stateAt) {
     // Independent calls can finish out of order while a newer call or approval
     // remains active. Reconcile that call without changing the newer activity.
@@ -52,6 +92,7 @@ export function reduceSession(
       event.callId &&
       (!event.turnId || !s.activeTurnId || event.turnId === s.activeTurnId)
     ) {
+      rememberCompletion();
       const active = s.activeTools.find((t) => t.id === event.callId);
       if (active && at >= active.startedAt) {
         s.activeTools = s.activeTools.filter((t) => t.id !== event.callId);
@@ -70,6 +111,20 @@ export function reduceSession(
       if (active) {
         active.command ??= d.command;
         active.path ??= d.path;
+      } else if (
+        sameTurn &&
+        s.lifecycle === "open" &&
+        ["working", "waiting"].includes(s.activity) &&
+        at >= (s.turnStartedAt ?? s.startedAt ?? 0) &&
+        !(s.completedToolIds ?? []).includes(event.callId)
+      ) {
+        s.activeTools.push({
+          id: event.callId,
+          name: d.toolName ?? "Інструмент",
+          startedAt: at,
+          command: d.command,
+          path: d.path,
+        });
       }
     }
     return s;
@@ -95,14 +150,6 @@ export function reduceSession(
     !["session.end", "process.exit"].includes(event.kind)
   )
     s.lifecycle = "open";
-  if (
-    d.subagentId &&
-    !["subagent.start", "subagent.end"].includes(event.kind)
-  ) {
-    const child = s.subagents.find((a) => a.id === d.subagentId);
-    if (child && event.kind === "tool.start") child.activity = "working";
-    return s;
-  }
   const clearWait = () => {
     s.requiresAttention = false;
     delete s.waitingReason;
@@ -131,6 +178,7 @@ export function reduceSession(
         : at > (s.turnStartedAt ?? 0);
       if (newTurn) {
         s.activeTools = [];
+        s.completedToolIds = [];
         s.turnStartedAt = at;
       }
       if (event.turnId) s.activeTurnId = event.turnId;
@@ -153,6 +201,7 @@ export function reduceSession(
       break;
     case "tool.start": {
       const id = event.callId ?? event.id;
+      if ((s.completedToolIds ?? []).includes(id)) break;
       const active = s.activeTools.find((t) => t.id === id);
       if (!active)
         s.activeTools.push({
@@ -173,6 +222,7 @@ export function reduceSession(
       break;
     }
     case "tool.end": {
+      rememberCompletion();
       const active = s.activeTools.find((t) => t.id === event.callId);
       s.lastTool = {
         ...active,

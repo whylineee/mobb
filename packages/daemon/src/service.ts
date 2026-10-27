@@ -12,6 +12,7 @@ import {
   type ProcessBinding,
 } from "@agentwatch/shared";
 import { reduceSession } from "./telemetry/reducer.js";
+import { MAX_OVERVIEW_SESSIONS, summarizeSession } from "./summary.js";
 
 type Listener = (message: StreamMessage) => void;
 type Row = { data: string };
@@ -96,7 +97,10 @@ export class AgentService {
               .get(event.id) as Row
           ).data,
         ) as AgentEvent;
-        const strong = event.source === "hook" ? event : existing,
+        const strong =
+            existing.source === "hook" && event.source !== "hook"
+              ? existing
+              : event,
           weak = strong === event ? existing : event;
         const merged: AgentEvent = {
           ...weak,
@@ -140,7 +144,7 @@ export class AgentService {
 
   get(key: string): Session | undefined {
     const s = this.sessions.get(key);
-    return s ? structuredClone(s) : undefined;
+    return s ? { ...structuredClone(s), revision: this.revision } : undefined;
   }
   updateProcess(key: string, binding: ProcessBinding | undefined): void {
     const previous = this.sessions.get(key);
@@ -158,7 +162,15 @@ export class AgentService {
   snapshot(): StateSnapshot {
     return {
       revision: this.revision,
-      sessions: structuredClone([...this.sessions.values()]),
+      sessions: [...this.sessions.values()]
+        .sort(
+          (a, b) =>
+            Number(b.lifecycle === "open") - Number(a.lifecycle === "open") ||
+            b.lastObservedAt - a.lastObservedAt,
+        )
+        .slice(0, MAX_OVERVIEW_SESSIONS)
+        .map((s) => summarizeSession({ ...s, revision: this.revision })),
+      omittedSessions: Math.max(0, this.sessions.size - MAX_OVERVIEW_SESSIONS),
       collectors: structuredClone([...this.collectors.values()]),
       serverTime: this.now(),
     };
@@ -193,6 +205,23 @@ export class AgentService {
   }
 
   private publish(message: StreamMessage): void {
+    if (message.type === "delta")
+      message = {
+        ...message,
+        data: {
+          ...message.data,
+          session: message.data.session
+            ? summarizeSession({
+                ...message.data.session,
+                revision: message.data.revision,
+              })
+            : undefined,
+          omittedSessions: Math.max(
+            0,
+            this.sessions.size - MAX_OVERVIEW_SESSIONS,
+          ),
+        },
+      };
     for (const listener of this.listeners) {
       try {
         listener(message);
