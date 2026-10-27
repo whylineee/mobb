@@ -3,6 +3,8 @@ import {
   Component,
   Suspense,
   memo,
+  createContext,
+  useContext,
   useCallback,
   useEffect,
   useMemo,
@@ -43,6 +45,7 @@ const [FoliageInstances, Foliage] = createInstances();
 const [PotInstances, Pot] = createInstances();
 const [OrbInstances, Orb] = createInstances();
 const [HeadInstances, Head] = createInstances();
+const RobotParts = createContext(false);
 declare global {
   interface Window {
     __agentwatchPerformance?: {
@@ -93,7 +96,10 @@ function Box({
   emissive?: string;
   emissiveIntensity?: number;
 }) {
-  return props.emissive ? (
+  const animated = useContext(RobotParts);
+  return animated ? (
+    <Head position={position} scale={size} color={color} />
+  ) : props.emissive ? (
     <Glow position={position} scale={size} color={color} />
   ) : rounded ? (
     <Soft position={position} scale={size} color={color} />
@@ -242,19 +248,21 @@ function Sofa({
   );
 }
 
-function Room({ rows }: { rows: number }) {
+function Room({ rows, shadows }: { rows: number; shadows: boolean }) {
   const depth = Math.max(20, rows * 3.25 + 3);
   const back = -depth / 2;
   return (
     <group>
-      <mesh
-        rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, -0.64, 0]}
-        receiveShadow
-      >
-        <planeGeometry args={[200, 200]} />
-        <meshLambertMaterial color="#65766c" />
-      </mesh>
+      {shadows && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, -0.64, 0]}
+          receiveShadow
+        >
+          <planeGeometry args={[200, 200]} />
+          <meshLambertMaterial color="#65766c" />
+        </mesh>
+      )}
       <RoundedBox
         args={[26, 0.6, depth]}
         radius={0.14}
@@ -669,78 +677,80 @@ const Robot = memo(function Robot({
     } else body.current.scale.setScalar(1);
   });
   return (
-    <group ref={body} position={[0, 0, 0]}>
-      <Box
-        position={[-0.19, 0.32, 0.11]}
-        size={[0.23, 0.43, 0.3]}
-        color="#4b6059"
-        rounded
-      />
-      <Box
-        position={[0.19, 0.32, 0.11]}
-        size={[0.23, 0.43, 0.3]}
-        color="#4b6059"
-        rounded
-      />
-      <Box
-        position={[0, 0.7, 0]}
-        size={[0.67, 0.65, 0.45]}
-        color={shell}
-        rounded
-      />
-      <Box
-        position={[0, 0.78, 0.24]}
-        size={[0.32, 0.25, 0.04]}
-        color={accent}
-        rounded
-      />
-      <Head position={[0, 1.34, 0]} scale={[0.88, 0.7, 0.62]} color={shell} />
-      <Box
-        position={[0, 1.34, 0.325]}
-        size={[0.66, 0.31, 0.03]}
-        color="#263d37"
-        rounded
-      />
-      {[-0.17, 0.17].map((x) => (
-        <Orb key={x} position={[x, 1.36, 0.35]} scale={0.058} color={light} />
-      ))}
-      <Box
-        position={[0, 1.65, 0]}
-        size={[0.045, 0.25, 0.045]}
-        color="#526b5e"
-      />
-      <Orb position={[0, 1.82, 0]} scale={0.065} color={accent} />
-      <group ref={left} position={[-0.43, 0.88, 0]}>
+    <RobotParts.Provider value={true}>
+      <group ref={body} position={[0, 0, 0]}>
         <Box
-          position={[0, -0.22, 0.08]}
-          size={[0.2, 0.45, 0.22]}
+          position={[-0.19, 0.32, 0.11]}
+          size={[0.23, 0.43, 0.3]}
+          color="#4b6059"
+          rounded
+        />
+        <Box
+          position={[0.19, 0.32, 0.11]}
+          size={[0.23, 0.43, 0.3]}
+          color="#4b6059"
+          rounded
+        />
+        <Box
+          position={[0, 0.7, 0]}
+          size={[0.67, 0.65, 0.45]}
           color={shell}
           rounded
         />
-      </group>
-      <group ref={right} position={[0.43, 0.88, 0]}>
         <Box
-          position={[0, -0.22, 0.08]}
-          size={[0.2, 0.45, 0.22]}
-          color={shell}
+          position={[0, 0.78, 0.24]}
+          size={[0.32, 0.25, 0.04]}
+          color={accent}
           rounded
         />
+        <Head position={[0, 1.34, 0]} scale={[0.88, 0.7, 0.62]} color={shell} />
+        <Box
+          position={[0, 1.34, 0.325]}
+          size={[0.66, 0.31, 0.03]}
+          color="#263d37"
+          rounded
+        />
+        {[-0.17, 0.17].map((x) => (
+          <Orb key={x} position={[x, 1.36, 0.35]} scale={0.058} color={light} />
+        ))}
+        <Box
+          position={[0, 1.65, 0]}
+          size={[0.045, 0.25, 0.045]}
+          color="#526b5e"
+        />
+        <Orb position={[0, 1.82, 0]} scale={0.065} color={accent} />
+        <group ref={left} position={[-0.43, 0.88, 0]}>
+          <Box
+            position={[0, -0.22, 0.08]}
+            size={[0.2, 0.45, 0.22]}
+            color={shell}
+            rounded
+          />
+        </group>
+        <group ref={right} position={[0.43, 0.88, 0]}>
+          <Box
+            position={[0, -0.22, 0.08]}
+            size={[0.2, 0.45, 0.22]}
+            color={shell}
+            rounded
+          />
+        </group>
+        {!codex && (
+          <>
+            <Box
+              position={[-0.45, 1.35, 0]}
+              size={[0.12, 0.25, 0.2]}
+              color={accent}
+            />
+            <Box
+              position={[0.45, 1.35, 0]}
+              size={[0.12, 0.25, 0.2]}
+              color={accent}
+            />
+          </>
+        )}
       </group>
-      {!codex && (
-        <>
-          <Box
-            position={[-0.45, 1.35, 0]}
-            size={[0.12, 0.25, 0.2]}
-            color={accent}
-          />
-          <Box
-            position={[0.45, 1.35, 0]}
-            size={[0.12, 0.25, 0.2]}
-            color={accent}
-          />
-        </>
-      )}
-    </group>
+    </RobotParts.Provider>
   );
 });
 
@@ -899,20 +909,11 @@ const Desk = memo(function Desk({
             }}
             aria-label={`Вибрати ${agentName(session.provider)} ${session.sessionId}`}
           >
-            <span className={`robot-dot dot-${status}`} />
-            <span>
-              {agentName(session.provider)}
-              <small>
-                {session.sessionId.length > 10
-                  ? session.sessionId.slice(0, 4) +
-                    "…" +
-                    session.sessionId.slice(-4)
-                  : session.sessionId}
-              </small>
-            </span>
-            {status === "waiting" && <b>!</b>}
-            {status === "unknown" && <b>?</b>}
+            <Bot size={12} aria-hidden="true" />
+            <span className={`robot-dot dot-${status}`} aria-hidden="true" />
             <span className="robot-tooltip">
+              <strong>{agentName(session.provider)}</strong>
+              <small>{session.sessionId}</small>
               <strong>{session.project}</strong>
               {STATUS_LABELS[status]}
               <small>
@@ -1076,12 +1077,10 @@ function PerformanceMeter({
 export default function Office(props: Props) {
   const [action, setAction] = useState({ type: "reset", id: 0 });
   const portal = useRef<HTMLDivElement>(null);
-  const [pixelRatio, setPixelRatio] = useState(1);
-  const lowerQuality = useCallback(
-    () => setPixelRatio((value) => Math.max(0.45, value * 0.75)),
-    [],
-  );
-  const shadows = props.sessions.length <= 8 && pixelRatio >= 1;
+  const [detailed, setDetailed] = useState(true);
+  // Preserve native pixel density. Reduce mesh detail and shadows under load.
+  const lowerQuality = useCallback(() => setDetailed(false), []);
+  const shadows = props.sessions.length <= 8 && detailed;
   const geometry = useMemo(() => new BoxGeometry(1, 1, 1), []);
   const softGeometry = useMemo(
     () => new RoundedBoxGeometry(1, 1, 1, 1, 0.06),
@@ -1166,7 +1165,7 @@ export default function Office(props: Props) {
         <Canvas
           orthographic
           camera={{ position: HOME, zoom: 28, near: 0.1, far: 1000 }}
-          dpr={pixelRatio}
+          dpr={[1, 2]}
           shadows={shadows}
           frameloop={props.reducedMotion ? "demand" : "always"}
           gl={{
@@ -1178,7 +1177,7 @@ export default function Office(props: Props) {
             if (!pointer.current.dragged) props.onSelect(null);
           }}
         >
-          <color attach="background" args={["#65766c"]} />
+          <color attach="background" args={["#8c9a7b"]} />
           <hemisphereLight args={["#e4ecdf", "#8d826c", 2]} />
           <ambientLight intensity={0.45} color="#e5e8d9" />
           <directionalLight
@@ -1200,6 +1199,7 @@ export default function Office(props: Props) {
           />
           <Suspense fallback={null}>
             <SolidInstances
+              frames={1}
               limit={Math.max(2200, furniture.length * 45 + 800)}
               geometry={geometry}
               castShadow
@@ -1207,31 +1207,35 @@ export default function Office(props: Props) {
             >
               <meshLambertMaterial color="white" />
               <SoftInstances
+                frames={1}
                 limit={Math.max(500, furniture.length * 15)}
-                geometry={pixelRatio < 0.75 ? geometry : softGeometry}
+                geometry={detailed ? softGeometry : geometry}
                 castShadow
                 receiveShadow
               >
                 <meshLambertMaterial />
-                <GlowInstances limit={Math.max(200, furniture.length * 5)}>
+                <GlowInstances
+                  frames={1}
+                  limit={Math.max(200, furniture.length * 5)}
+                >
                   <boxGeometry args={[1, 1, 1]} />
                   <meshBasicMaterial />
-                  <FoliageInstances limit={100} castShadow>
+                  <FoliageInstances frames={1} limit={100} castShadow>
                     <sphereGeometry args={[0.24, 6, 5]} />
                     <meshLambertMaterial />
-                    <PotInstances limit={24} castShadow>
+                    <PotInstances frames={1} limit={24} castShadow>
                       <cylinderGeometry args={[0.29, 0.23, 0.5, 8]} />
                       <meshLambertMaterial />
                       <OrbInstances limit={Math.max(100, furniture.length * 3)}>
                         <sphereGeometry args={[1, 8, 6]} />
                         <meshBasicMaterial />
                         <HeadInstances
-                          limit={Math.max(100, furniture.length)}
-                          geometry={pixelRatio < 0.75 ? geometry : softGeometry}
+                          limit={Math.max(100, furniture.length * 15)}
+                          geometry={detailed ? softGeometry : geometry}
                           castShadow
                         >
                           <meshLambertMaterial />
-                          <Room rows={rows} />
+                          <Room rows={rows} shadows={shadows} />
                           {furniture.map(({ seat, session }, i) => (
                             <Desk
                               key={i}

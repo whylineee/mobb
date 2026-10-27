@@ -2172,11 +2172,32 @@ kbd {
   height: 44px;
 }
 .office-screen .robot-label {
-  padding: 7px 10px;
-  min-height: 44px;
-  font-size: 10px;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  gap: 0;
+  border-radius: 50%;
   border-color: #a0b4948c;
   background: #283e33ed;
+}
+.office-screen .robot-label > svg {
+  width: 12px;
+  height: 12px;
+}
+.office-screen .robot-label > .robot-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid #283e33;
+}
+.office-screen .robot-tooltip {
+  width: 180px;
+  font-size: 10px;
+  overflow-wrap: anywhere;
 }
 .office-screen .robot-label small {
   font-size: 8px;
