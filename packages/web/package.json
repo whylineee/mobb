@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "dev": "next dev --hostname 127.0.0.1", "build": "next build" },
+  "scripts": {
+    "dev": "next dev --hostname 127.0.0.1",
+    "build": "next build"
+  },
   "dependencies": {
     "@agentwatch/shared": "workspace:*",
     "@react-three/drei": "latest",
@@ -18,5 +21,9 @@
     "three": "latest",
     "zustand": "latest"
   },
-  "devDependencies": { "@types/react": "^19.0.0", "@types/react-dom": "^19.0.0", "@types/three": "latest" }
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "latest"
+  }
 }
