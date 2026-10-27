@@ -28,6 +28,13 @@ empty state keeps furniture visible; offline state retains last data; missing
 WebGL opens the session list; partial telemetry is disclosed; authorization
 uses the existing local-key form.
 
+Agent markers are compact 22px circles. Provider, session ID and task are
+shown on hover or keyboard focus; the session list remains the larger-touch
+alternative. Preserve the display pixel ratio up to 2x, including under load.
+Adapt mesh detail and shadows instead of lowering render resolution. Static
+furniture instance matrices update only when the scene changes; robot parts
+remain in an independent animated instance batch.
+
 Implementation: simplify Dashboard, model permanent room furniture, enable
 camera rotation/reset, add scoped full-screen CSS, then run typecheck, build,
 existing tests and browser checks for viewport coverage, orbit/reset,

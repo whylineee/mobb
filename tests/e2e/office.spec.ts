@@ -29,6 +29,67 @@ test.beforeEach(async ({ request }) => {
   });
 });
 
+test.describe("compact markers and sharp Retina rendering", () => {
+  test.use({ viewport: { width: 702, height: 762 }, deviceScaleFactor: 2 });
+
+  test("twenty markers leave the office visible", async ({ page, request }) => {
+    for (let i = 0; i < 20; i++)
+      await hook(request, `compact-${i}`, "UserPromptSubmit");
+    await page.goto(`/#token=${UI_TOKEN}`);
+    const markers = page.getByTestId("robot-label");
+    await expect(markers).toHaveCount(20);
+    const bounds = await markers.evaluateAll((items) =>
+      items.map((item) => {
+        const { x, y, width, height } = item.getBoundingClientRect();
+        return { x, y, width, height };
+      }),
+    );
+    expect(bounds.every((b) => b.width <= 26 && b.height <= 26)).toBe(true);
+    for (let i = 0; i < bounds.length; i++)
+      for (let j = i + 1; j < bounds.length; j++) {
+        const a = bounds[i]!,
+          b = bounds[j]!;
+        expect(
+          a.x + a.width <= b.x ||
+            b.x + b.width <= a.x ||
+            a.y + a.height <= b.y ||
+            b.y + b.height <= a.y,
+        ).toBe(true);
+      }
+    await page.screenshot({ path: "test-results/office-compact-retina.png" });
+    const marker = page.getByRole("button", {
+      name: "Вибрати Codex compact-0",
+      exact: true,
+    });
+    await marker.hover();
+    await expect(marker.locator(".robot-tooltip")).toContainText("compact-0");
+    await marker.click();
+    await expect(page.getByTestId("session-panel")).toBeVisible();
+  });
+
+  test("Retina stays sharp after the performance monitor samples frames", async ({
+    page,
+    request,
+  }) => {
+    for (let i = 0; i < 20; i++)
+      await hook(request, `sharp-${i}`, "UserPromptSubmit");
+    await page.goto(`/#token=${UI_TOKEN}`);
+    await expect(page.getByTestId("robot-label")).toHaveCount(20);
+    const canvas = page.locator("canvas");
+    await expect(canvas).toHaveJSProperty("clientWidth", 702);
+    await expect(canvas).toHaveJSProperty("width", 1404);
+    await expect(canvas).toHaveJSProperty("height", 1524);
+    await page.waitForFunction(
+      () =>
+        (window as unknown as { __agentwatchPerformance?: { frames: number } })
+          .__agentwatchPerformance?.frames! > 180,
+    );
+    await expect(canvas).toHaveJSProperty("width", 1404);
+    await expect(canvas).toHaveJSProperty("height", 1524);
+    await page.screenshot({ path: "test-results/office-sharp-retina.png" });
+  });
+});
+
 test("empty office and accessible fallback do not require external requests", async ({
   page,
 }) => {
