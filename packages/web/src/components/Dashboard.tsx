@@ -1,31 +1,8 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Activity,
-  ArrowDownLeft,
-  ArrowUpRight,
-  Bot,
-  ChevronDown,
-  CircleHelp,
-  Info,
-  Code2,
-  Coffee,
-  Folder,
-  LayoutGrid,
-  List,
-  LockKeyhole,
-  Monitor,
-  Radio,
-  Search,
-  Settings2,
-  ShieldCheck,
-  Terminal,
-  Users,
-  Wifi,
-  WifiOff,
-} from "lucide-react";
-import { officeVisible, sessionStatus, type Session } from "@agentwatch/shared";
+import { ArrowUpRight, Bot, Code2, List, LockKeyhole, X } from "lucide-react";
+import { officeVisible, type Session } from "@agentwatch/shared";
 import { bootstrapToken, connect, TOKEN_KEY } from "../lib/client";
 import { telemetryStore, useTelemetry } from "../lib/store";
 import { agentName, relativeTime, Status } from "./Status";
@@ -132,29 +109,29 @@ function SessionList({ sessions, now }: { sessions: Session[]; now: number }) {
 }
 
 export default function Dashboard() {
-  const [token, setToken] = useState<string | null | undefined>(undefined),
-    [now, setNow] = useState(0);
-  const [view, setView] = useState<"office" | "list">("office"),
-    [search, setSearch] = useState(""),
-    [provider, setProvider] = useState("all"),
-    [project, setProject] = useState("all");
-  const [labels, setLabels] = useState(true),
-    [reduced, setReduced] = useState(false),
-    [diagnostics, setDiagnostics] = useState(false);
-  const sessions = useTelemetry((s) => s.sessions),
-    selectedKey = useTelemetry((s) => s.selectedKey),
-    connection = useTelemetry((s) => s.connection),
-    collectors = useTelemetry((s) => s.collectors),
-    omittedSessions = useTelemetry((s) => s.omittedSessions);
+  const [token, setToken] = useState<string | null | undefined>(undefined);
+  const [now, setNow] = useState(0);
+  const [listOpen, setListOpen] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+  const [reduced, setReduced] = useState(false);
+  const sessions = useTelemetry((s) => s.sessions);
+  const selectedKey = useTelemetry((s) => s.selectedKey);
+  const connection = useTelemetry((s) => s.connection);
+  const omittedSessions = useTelemetry((s) => s.omittedSessions);
+
   useEffect(() => {
     setToken(bootstrapToken());
     setNow(Date.now());
-    if (new URLSearchParams(location.search).get("view") === "list")
-      setView("list");
+    setListOpen(new URLSearchParams(location.search).get("view") === "list");
     const motion = matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(motion.matches);
+    const updateMotion = () => setReduced(motion.matches);
+    updateMotion();
+    motion.addEventListener("change", updateMotion);
     const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      motion.removeEventListener("change", updateMotion);
+    };
   }, []);
   useEffect(() => {
     if (!token) return;
@@ -162,34 +139,33 @@ export default function Dashboard() {
     void connect(token, controller.signal);
     return () => controller.abort();
   }, [token]);
-  const allVisible = useMemo(
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (
+        event.key === "Escape" &&
+        !telemetryStore.getState().selectedKey &&
+        !unavailable
+      )
+        setListOpen(false);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [unavailable]);
+
+  const visible = useMemo(
     () => Object.values(sessions).filter((s) => officeVisible(s, now)),
     [sessions, now],
-  );
-  const filtered = useMemo(
-    () =>
-      allVisible.filter(
-        (s) =>
-          (provider === "all" || s.provider === provider) &&
-          (project === "all" || s.project === project) &&
-          `${s.project} ${s.sessionId} ${s.task?.text ?? ""} ${s.provider}`
-            .toLowerCase()
-            .includes(search.toLowerCase()),
-      ),
-    [allVisible, provider, project, search],
-  );
-  const projects = useMemo(
-    () => [...new Set(allVisible.map((s) => s.project))].sort(),
-    [allVisible],
   );
   const selected = selectedKey ? sessions[selectedKey] : undefined;
   const selectSession = useCallback(
     (key: string | null) => telemetryStore.getState().select(key),
     [],
   );
-  const fallback = useCallback(() => setView("list"), []);
-  const counts = { working: 0, waiting: 0, idle: 0, unknown: 0, ended: 0 };
-  for (const s of allVisible) counts[sessionStatus(s)]++;
+  const fallback = useCallback(() => {
+    setUnavailable(true);
+    setListOpen(true);
+  }, []);
+
   if (token === undefined)
     return (
       <div className="scene-loading full-loading">
@@ -206,401 +182,100 @@ export default function Dashboard() {
         }}
       />
     );
+
   return (
-    <div className={`app-shell ${reduced ? "reduced-motion" : ""}`}>
-      <aside className="sidebar">
-        <a className="brand" href="/" aria-label="AgentWatch головна">
-          <span className="brand-mark">
-            <Bot size={24} />
-          </span>
-          <span>
-            <h1>AgentWatch</h1>
-            <small>YOUR AGENTS, AT WORK</small>
-          </span>
-        </a>
-        <div className="workspace-chip">
-          <span className="workspace-icon">
-            <Monitor size={17} />
-          </span>
-          <span>
-            <strong>Мій робочий простір</strong>
-            <small>Локальний Mac</small>
-          </span>
-          <span className="tiny-dot" />
+    <main
+      className={`office-screen ${reduced ? "reduced-motion" : ""}`}
+      aria-label="Інтерактивний 3D-офіс"
+    >
+      <h1 className="sr-only">AgentWatch</h1>
+      <p id="office-instructions" className="sr-only">
+        Перетягуйте, щоб обертати офіс. Колесо миші змінює масштаб. Права кнопка
+        миші переміщує камеру. На телефоні обертайте одним пальцем, переміщуйте
+        й наближайте двома. Виберіть агента, щоб відкрити деталі. Для роботи з
+        клавіатури відкрийте список сесій.
+      </p>
+      <div
+        className="office-stage"
+        data-testid="office-stage"
+        aria-describedby="office-instructions"
+      >
+        {!unavailable && (
+          <Office
+            sessions={visible}
+            allSessions={visible}
+            selectedKey={selectedKey}
+            labels
+            reducedMotion={reduced}
+            onSelect={selectSession}
+            onFallback={fallback}
+          />
+        )}
+      </div>
+      <button
+        className="office-list-toggle"
+        aria-label="Список"
+        aria-pressed={listOpen}
+        aria-expanded={listOpen}
+        aria-controls="office-sessions"
+        title="Список сесій"
+        onClick={() => setListOpen((open) => unavailable || !open)}
+      >
+        <List size={19} />
+      </button>
+      {visible.length === 0 && !listOpen && connection === "online" && (
+        <div className="office-empty-note" role="status">
+          <strong>Офіс поки порожній</strong>
+          <span>Запустіть Claude Code або Codex — агент займе своє місце.</span>
         </div>
-        <span className="nav-label">МОНІТОРИНГ</span>
-        <nav aria-label="Основна навігація">
-          <button
-            className={view === "office" ? "nav-item active" : "nav-item"}
-            onClick={() => setView("office")}
-          >
-            <LayoutGrid size={17} />
-            Віртуальний офіс<span>{allVisible.length}</span>
-          </button>
-          <button
-            className={view === "list" ? "nav-item active" : "nav-item"}
-            onClick={() => setView("list")}
-          >
-            <List size={17} />
-            Усі сесії<span>{allVisible.length}</span>
-          </button>
-        </nav>
-        <div className="nav-section-head">
-          <span className="nav-label">ПРОЄКТИ</span>
-          <span className="project-count">{projects.length}</span>
+      )}
+      {(connection !== "online" || omittedSessions > 0) && (
+        <div className="office-notice" role="status">
+          {connection === "offline"
+            ? "З’єднання втрачено. Показано останні дані. Перепідключення автоматичне."
+            : connection === "connecting"
+              ? connectionLabels.connecting
+              : null}
+          {omittedSessions > 0 &&
+            ` Показано ${visible.length} сесій. Ще ${omittedSessions} збережено локально.`}
         </div>
-        <nav className="projects-nav" aria-label="Проєкти">
-          <button
-            className={`project-item ${project === "all" ? "active-project" : ""}`}
-            onClick={() => setProject("all")}
-          >
-            <span className="project-dot" />
-            Усі проєкти
-          </button>
-          {projects.map((p, i) => (
-            <button
-              key={p}
-              className={`project-item ${project === p ? "active-project" : ""}`}
-              onClick={() => setProject(p)}
-            >
-              <Folder
-                size={15}
-                style={{ color: ["#71bfa8", "#d7ab78", "#9392c7"][i % 3] }}
-              />
-              <span>{p}</span>
-              <small>{allVisible.filter((s) => s.project === p).length}</small>
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="local-card">
-            <ShieldCheck size={19} />
-            <strong>Тільки на вашому Mac</strong>
-            <p>
-              Приватні сесії.
-              <br />
-              Жодних хмарних сервісів.
-            </p>
-            <span>
-              <i />
-              LOCAL FIRST
-            </span>
-          </div>
-          <button
-            className="nav-item diagnostic-toggle"
-            onClick={() => setDiagnostics((v) => !v)}
-          >
-            <Settings2 size={16} />
-            Стан джерел
-            <CircleHelp size={14} />
-          </button>
-          <div className="sidebar-version">
-            <span>AGENTWATCH</span>
-            <span>v0.1.0</span>
-          </div>
-        </div>
-      </aside>
-      <main className="workspace">
-        <header className="topbar">
-          <div className="breadcrumb">
-            <span>Робочий простір</span>
-            <span>/</span>
-            <strong>
-              {view === "office" ? "Віртуальний офіс" : "Усі сесії"}
-            </strong>
-          </div>
-          <div className={`connection connection-${connection}`}>
-            {connection === "online" ? (
-              <Radio size={13} />
-            ) : (
-              <WifiOff size={13} />
-            )}
-            <span>{connectionLabels[connection]}</span>
-            <i />
-          </div>
-        </header>
-        <div className={`workspace-body ${selected ? "has-panel" : ""}`}>
-          <section className="workspace-content">
-            <div className="intro">
-              <div>
-                <div className="eyebrow intro-eyebrow">
-                  <span className="tiny-dot" />
-                  LIVE WORKSPACE
-                </div>
-                <h2>
-                  Ваші агенти, за роботою<span>.</span>
-                </h2>
-                <p>Усе, над чим вони працюють — в одному просторі.</p>
-              </div>
-              <span className="date-label">
-                <span>СЬОГОДНІ</span>
-                {now
-                  ? new Date(now).toLocaleDateString("uk-UA", {
-                      day: "numeric",
-                      month: "long",
-                    })
-                  : ""}
-              </span>
-            </div>
-            <div className="metrics">
-              <div className="metric-card">
-                <span className="metric-icon mint">
-                  <Activity size={18} />
-                </span>
-                <div>
-                  <span>Працюють</span>
-                  <strong>{counts.working.toString().padStart(2, "0")}</strong>
-                </div>
-                <span className="metric-status">
-                  <i className="working" />
-                  LIVE
-                </span>
-              </div>
-              <div className="metric-card">
-                <span className="metric-icon amber">
-                  <Users size={18} />
-                </span>
-                <div>
-                  <span>Потребують уваги</span>
-                  <strong>{counts.waiting.toString().padStart(2, "0")}</strong>
-                </div>
-                {counts.waiting > 0 && (
-                  <span className="attention-pill">ПЕРЕВІРТЕ</span>
-                )}
-              </div>
-              <div className="metric-card">
-                <span className="metric-icon blue">
-                  <Coffee size={18} />
-                </span>
-                <div>
-                  <span>Очікують запиту</span>
-                  <strong>{counts.idle.toString().padStart(2, "0")}</strong>
-                </div>
-              </div>
-              <div className="metric-card total-card">
-                <span className="metric-icon gray">
-                  <Bot size={18} />
-                </span>
-                <div>
-                  <span>Сесій в офісі</span>
-                  <strong>
-                    {allVisible.length.toString().padStart(2, "0")}
-                  </strong>
-                </div>
-              </div>
-            </div>
-            <div className="office-card">
-              <div className="office-header">
-                <div>
-                  <span className="office-heading-icon">
-                    <LayoutGrid size={16} />
-                  </span>
-                  <strong>
-                    {view === "office" ? "Віртуальний офіс" : "Сесії агентів"}
-                  </strong>
-                  <span className="live-pill">
-                    <i />
-                    LIVE
-                  </span>
-                </div>
-                <div
-                  className="view-switch"
-                  role="group"
-                  aria-label="Режим перегляду"
-                >
-                  <button
-                    aria-label="Офіс"
-                    aria-pressed={view === "office"}
-                    onClick={() => setView("office")}
-                  >
-                    <LayoutGrid size={14} />
-                    <span>Офіс</span>
-                  </button>
-                  <button
-                    aria-label="Список"
-                    aria-pressed={view === "list"}
-                    onClick={() => setView("list")}
-                  >
-                    <List size={15} />
-                    <span>Список</span>
-                  </button>
-                </div>
-              </div>
-              <div className="office-filters">
-                <label className="search-box">
-                  <Search size={15} />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Знайти сесію…"
-                    aria-label="Знайти сесію"
-                  />
-                  <kbd>⌕</kbd>
-                </label>
-                <label className="provider-filter">
-                  <Code2 size={14} />
-                  <select
-                    aria-label="Тип агента"
-                    value={provider}
-                    onChange={(e) => setProvider(e.target.value)}
-                  >
-                    <option value="all">Усі агенти</option>
-                    <option value="codex">Codex</option>
-                    <option value="claude">Claude Code</option>
-                  </select>
-                  <ChevronDown size={13} />
-                </label>
-                <span className="filter-count">
-                  {filtered.length} {filtered.length === 1 ? "сесія" : "сесій"}
-                </span>
-              </div>
-              <div
-                className={`office-viewport ${view === "list" ? "list-viewport" : ""}`}
+      )}
+      {listOpen && (
+        <section
+          id="office-sessions"
+          className="office-sessions"
+          aria-label="Сесії агентів"
+        >
+          <header>
+            <h2>
+              Сесії агентів <span>{visible.length}</span>
+            </h2>
+            {!unavailable && (
+              <button
+                aria-label="Закрити список"
+                onClick={() => setListOpen(false)}
               >
-                {view === "office" && (
-                  <Office
-                    sessions={filtered}
-                    allSessions={allVisible}
-                    selectedKey={selectedKey}
-                    labels={labels}
-                    reducedMotion={reduced}
-                    onSelect={selectSession}
-                    onFallback={fallback}
-                  />
-                )}
-                {view === "list" && (
-                  <SessionList sessions={filtered} now={now} />
-                )}
-                {filtered.length === 0 && (
-                  <div className="empty-office">
-                    <span className="empty-icon">
-                      <Bot size={30} />
-                    </span>
-                    <h3>
-                      {allVisible.length
-                        ? "Сесій за цим фільтром немає"
-                        : "Офіс поки порожній"}
-                    </h3>
-                    <p>
-                      {allVisible.length
-                        ? "Спробуйте інший запит або проєкт."
-                        : "Запустіть Claude Code або Codex. Сесії з’являться тут автоматично."}
-                    </p>
-                    {!allVisible.length && (
-                      <span className="empty-hint">
-                        <Terminal size={12} />
-                        Hooks + локальні транскрипти
-                      </span>
-                    )}
-                  </div>
-                )}
-                {view === "office" && (
-                  <div className="scene-options">
-                    <button
-                      className={labels ? "option-active" : ""}
-                      onClick={() => setLabels((v) => !v)}
-                      aria-pressed={labels}
-                    >
-                      Підписи
-                    </button>
-                    <span />
-                    <button
-                      className={reduced ? "option-active" : ""}
-                      onClick={() => setReduced((v) => !v)}
-                      aria-pressed={reduced}
-                    >
-                      Менше руху
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="office-legend">
-                <div>
-                  <span>
-                    <i className="legend-dot dot-working" />
-                    Працює
-                  </span>
-                  <span>
-                    <i className="legend-dot dot-waiting" />
-                    Потрібна увага
-                  </span>
-                  <span>
-                    <i className="legend-dot dot-idle" />
-                    Очікує
-                  </span>
-                  {counts.unknown > 0 && (
-                    <span>
-                      <i className="legend-dot dot-unknown" />
-                      Невідомо: {counts.unknown}
-                    </span>
-                  )}
-                </div>
-                <span className="scene-tip">
-                  {view === "office"
-                    ? "Клік — деталі · Перетягування — огляд"
-                    : "Виберіть сесію для деталей"}
-                  <ArrowUpRight size={12} />
-                </span>
-              </div>
-            </div>
-            {omittedSessions > 0 && (
-              <div className="connection-banner">
-                <Info size={15} />
-                <span>
-                  Огляд обмежено 200 сесіями. Ще {omittedSessions} збережено
-                  локально; відкриті сесії мають пріоритет.
-                </span>
-              </div>
+                <X size={18} />
+              </button>
             )}
-            {connection === "offline" && (
-              <div className="connection-banner">
-                <WifiOff size={15} />
-                <span>
-                  З’єднання втрачено. Показано останні отримані дані;
-                  перепідключення автоматичне.
-                </span>
-              </div>
-            )}
-            {diagnostics && (
-              <div className="diagnostics">
-                <strong>Стан джерел</strong>
-                {collectors.length ? (
-                  collectors.map((c) => (
-                    <div key={c.id}>
-                      <span
-                        className={`legend-dot ${c.state === "ready" ? "dot-working" : "dot-waiting"}`}
-                      />
-                      <span>
-                        <b>{c.id}</b>
-                        {c.message}
-                      </span>
-                      {c.droppedEvents > 0 && (
-                        <small>Втрачено: {c.droppedEvents}</small>
-                      )}
-                    </div>
-                  ))
-                ) : (
-                  <p>Колектори ще не передали стан.</p>
-                )}
-              </div>
-            )}
-            <footer className="workspace-footer">
-              <span>
-                <LockKeyhole size={12} />
-                Лише перегляд. Дані залишаються на цьому комп’ютері.
-              </span>
-              <span>
-                <Wifi size={12} />
-                127.0.0.1 <i />
-                Локальне з’єднання
-              </span>
-            </footer>
-          </section>
-          {selected && (
-            <SessionPanel key={selected.key} session={selected} token={token} />
+          </header>
+          {unavailable && (
+            <p className="office-list-message" role="status">
+              3D недоступне у цьому браузері. Сесії доступні у списку.
+            </p>
           )}
-        </div>
-      </main>
-    </div>
+          {visible.length ? (
+            <SessionList sessions={visible} now={now} />
+          ) : (
+            <p className="office-list-message">
+              Офіс поки порожній. Запустіть Claude Code або Codex.
+            </p>
+          )}
+        </section>
+      )}
+      {selected && (
+        <SessionPanel key={selected.key} session={selected} token={token} />
+      )}
+    </main>
   );
 }

@@ -2012,3 +2012,207 @@ kbd {
     scroll-behavior: auto !important;
   }
 }
+
+/* The room is the primary surface; tools and session details float over it. */
+.office-screen {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  overflow: hidden;
+  isolation: isolate;
+  background: #65766c;
+}
+.office-stage {
+  position: absolute;
+  inset: 0;
+}
+.office-stage .office-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+.office-stage .office-canvas:active {
+  cursor: grabbing;
+}
+.office-stage canvas {
+  display: block;
+  touch-action: none;
+}
+.office-screen .camera-controls,
+.office-list-toggle {
+  background: #2c4038e8;
+  border: 1px solid #b3c7b342;
+  border-radius: 12px;
+  box-shadow: 0 4px 18px #273a3326;
+  backdrop-filter: blur(12px);
+  color: #edf0df;
+}
+.office-screen .camera-controls {
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
+  padding: 4px;
+  gap: 2px;
+}
+.office-screen .camera-controls button {
+  width: 44px;
+  height: 44px;
+  color: #edf0df;
+  border-radius: 8px;
+}
+.office-screen .camera-controls button:hover,
+.office-list-toggle:hover {
+  background: #466050;
+}
+.office-list-toggle {
+  position: absolute;
+  right: max(24px, env(safe-area-inset-right));
+  top: max(24px, env(safe-area-inset-top));
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  z-index: 30;
+}
+.office-empty-note {
+  position: absolute;
+  left: max(28px, env(safe-area-inset-left));
+  bottom: max(30px, env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-width: min(360px, calc(100vw - 230px));
+  color: #f0f0de;
+  pointer-events: none;
+  text-shadow: 0 1px 4px #32483e80;
+}
+.office-empty-note strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.office-empty-note span {
+  font-size: 11px;
+  line-height: 1.6;
+  color: #e2e7d7;
+}
+.office-notice {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  max-width: min(420px, calc(100vw - 112px));
+  background: #2c4038ed;
+  border: 1px solid #c8c4a152;
+  padding: 12px 16px;
+  border-radius: 10px;
+  color: #eddfb7;
+  font-size: 12px;
+  line-height: 1.6;
+  z-index: 25;
+}
+.office-sessions {
+  position: absolute;
+  inset: 24px auto 24px 24px;
+  width: min(660px, calc(100vw - 112px));
+  height: fit-content;
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  border: 1px solid #a2b29066;
+  border-radius: 16px;
+  background: #25372cf5;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 16px 70px #1f302c40;
+  z-index: 35;
+}
+.office-sessions > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 12px 22px;
+}
+.office-sessions h2 {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
+}
+.office-sessions h2 span {
+  margin-left: 8px;
+  color: #aabb9f;
+  font-size: 12px;
+}
+.office-sessions > header button {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+}
+.office-sessions > header button:hover {
+  background: #3b513d;
+}
+.office-list-message {
+  padding: 0 22px 22px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #c5d3b7;
+}
+.office-screen > .session-panel {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  bottom: 92px;
+  width: 368px;
+  height: auto;
+  min-width: 0;
+  z-index: 50;
+  box-shadow: 0 14px 70px #23362b40;
+}
+.office-screen .icon-button {
+  width: 44px;
+  height: 44px;
+}
+.office-screen .robot-label {
+  padding: 7px 10px;
+  min-height: 44px;
+  font-size: 10px;
+  border-color: #a0b4948c;
+  background: #283e33ed;
+}
+.office-screen .robot-label small {
+  font-size: 8px;
+  color: #c0cfb3;
+}
+.office-screen .robot-label:focus-visible,
+.office-screen button:focus-visible {
+  outline: 3px solid #f1e3b3;
+  outline-offset: 3px;
+}
+@media (max-width: 650px) {
+  .office-screen .camera-controls {
+    right: 14px;
+    bottom: max(14px, env(safe-area-inset-bottom));
+  }
+  .office-list-toggle {
+    top: max(14px, env(safe-area-inset-top));
+    right: 14px;
+  }
+  .office-empty-note {
+    left: 20px;
+    bottom: 86px;
+    max-width: calc(100vw - 40px);
+  }
+  .office-notice {
+    top: 14px;
+    left: 14px;
+    max-width: calc(100vw - 90px);
+  }
+  .office-sessions {
+    inset: 76px 12px auto;
+    width: auto;
+    max-height: calc(100dvh - 164px);
+  }
+  .office-screen > .session-panel {
+    inset: 76px 12px 84px;
+    width: auto;
+  }
+}

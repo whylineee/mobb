@@ -43,8 +43,17 @@ test("empty office and accessible fallback do not require external requests", as
   });
   await page.goto(`/#token=${UI_TOKEN}`);
   await expect(
-    page.getByRole("heading", { name: "AgentWatch", exact: true }),
+    page.getByRole("main", { name: "Інтерактивний 3D-офіс" }),
   ).toBeVisible();
+  await expect(page.locator("canvas")).toBeVisible();
+  await expect
+    .poll(() => page.locator("canvas").boundingBox())
+    .toEqual({ x: 0, y: 0, width: 1440, height: 1000 });
+  await expect(
+    page.locator(".sidebar, .topbar, .metrics, .intro, .office-card"),
+  ).toHaveCount(0);
+  await expect(page.getByTestId("session-panel")).toHaveCount(0);
+  await expect(page.locator("img")).toHaveCount(0);
   await expect(page.getByText("Офіс поки порожній")).toBeVisible();
   await page.getByRole("button", { name: "Список", exact: true }).click();
   await expect(
@@ -54,12 +63,126 @@ test("empty office and accessible fallback do not require external requests", as
   expect(page.url()).not.toContain("token=");
 });
 
+test("office camera orbits, zooms and resets without changing the full-screen layout", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`/#token=${UI_TOKEN}`);
+  const canvas = page.locator("canvas");
+  await expect(canvas).toBeVisible();
+  await expect(canvas).toHaveJSProperty("clientWidth", 1440);
+  await page.waitForFunction(
+    () =>
+      (window as unknown as { __agentwatchPerformance?: { frames: number } })
+        .__agentwatchPerformance?.frames! >= 3,
+  );
+  await page.getByRole("button", { name: "Показати весь офіс" }).click();
+  const home = await canvas.screenshot({
+    path: "test-results/camera-home.png",
+  });
+  await page.mouse.move(760, 600);
+  await page.mouse.down();
+  await page.mouse.move(960, 650, { steps: 16 });
+  await page.mouse.up();
+  const rotated = await canvas.screenshot();
+  expect(rotated.equals(home)).toBe(false);
+  await page.getByRole("button", { name: "Наблизити", exact: true }).click();
+  expect((await canvas.screenshot()).equals(rotated)).toBe(false);
+  await page.getByRole("button", { name: "Показати весь офіс" }).click();
+  expect(
+    (await canvas.screenshot({ path: "test-results/camera-reset.png" })).equals(
+      home,
+    ),
+  ).toBe(true);
+  await expect(canvas).toHaveJSProperty("clientWidth", 1440);
+  await page.screenshot({ path: "test-results/office-3d-desktop.png" });
+});
+
+test("portrait office fills the viewport and the session list is keyboard accessible", async ({
+  page,
+  request,
+}) => {
+  await hook(request, "portrait", "UserPromptSubmit");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`/#token=${UI_TOKEN}`);
+  await expect(page.getByTestId("robot-label")).toHaveCount(1);
+  expect(await page.locator("canvas").boundingBox()).toEqual({
+    x: 0,
+    y: 0,
+    width: 390,
+    height: 844,
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    390,
+  );
+  await page.screenshot({ path: "test-results/office-3d-mobile.png" });
+  await page.getByRole("button", { name: "Список", exact: true }).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("session-codex:portrait")).toBeVisible();
+  await page.getByTestId("session-codex:portrait").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("session-panel")).toBeVisible();
+  expect(await page.locator("canvas").boundingBox()).toEqual({
+    x: 0,
+    y: 0,
+    width: 390,
+    height: 844,
+  });
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("session-panel")).toHaveCount(0);
+  await page.getByRole("button", { name: "Закрити список" }).click();
+  await expect(page.getByRole("region", { name: "Сесії агентів" })).toHaveCount(
+    0,
+  );
+});
+
+test("local key opens the office and connection failures preserve the room", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.getByLabel("Локальний ключ")).toBeVisible();
+  await page.getByLabel("Локальний ключ").fill(UI_TOKEN);
+  await page.getByRole("button", { name: "Відкрити офіс" }).click();
+  await expect(page.locator("canvas")).toHaveJSProperty("clientWidth", 1440);
+  await expect(page.getByText("Офіс поки порожній")).toBeVisible();
+  await page.route("**/api/stream", (route) => route.abort("failed"));
+  await page.reload();
+  await expect(page.getByText(/З’єднання втрачено/)).toBeVisible();
+  await expect(page.locator("canvas")).toBeVisible();
+  await page.screenshot({ path: "test-results/office-offline.png" });
+});
+
+test("connecting and partial telemetry are disclosed without hiding the office", async ({
+  page,
+}) => {
+  let release: () => void = () => {};
+  const ready = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/stream", async (route) => {
+    await ready;
+    await route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: `event: snapshot\ndata: ${JSON.stringify({ sessions: [], revision: 0, collectors: [], omittedSessions: 7 })}\n\n`,
+    });
+  });
+  await page.goto(`/#token=${UI_TOKEN}`);
+  await expect(page.getByText("З’єднання…", { exact: true })).toBeVisible();
+  await expect(page.locator("canvas")).toHaveJSProperty("clientWidth", 1440);
+  release();
+  await expect(page.getByText(/Ще 7 збережено локально/)).toBeVisible();
+  await expect(page.locator("canvas")).toBeVisible();
+  await page.screenshot({ path: "test-results/office-partial.png" });
+});
+
 test("two same-project sessions have distinct selection and live state; text expands on click", async ({
   page,
   request,
 }) => {
-  await hook(request, "alpha", "SessionStart");
-  await hook(request, "bravo", "SessionStart");
+  await hook(request, "alpha", "UserPromptSubmit");
+  await hook(request, "bravo", "UserPromptSubmit");
   const task =
     "Перевірити обробку даних. ".repeat(15) + "УНІКАЛЬНИЙ КІНЕЦЬ ЗАПИТУ";
   await hook(request, "alpha", "UserPromptSubmit", {
@@ -101,7 +224,7 @@ test("reconnect resyncs without duplicate sessions or timeline events", async ({
   context,
   request,
 }) => {
-  await hook(request, "alpha", "SessionStart");
+  await hook(request, "alpha", "UserPromptSubmit");
   await page.goto(`/?view=list#token=${UI_TOKEN}`);
   await page.getByTestId("session-codex:alpha").click();
   await context.setOffline(true);
@@ -124,7 +247,7 @@ test("ended robots disappear after 60 seconds while their drawer stays open", as
   request,
 }) => {
   await page.clock.install({ time: new Date() });
-  await hook(request, "alpha", "SessionStart");
+  await hook(request, "alpha", "UserPromptSubmit");
   await page.goto(`/?view=list#token=${UI_TOKEN}`);
   await page.getByTestId("session-codex:alpha").click();
   await hook(request, "alpha", "SessionEnd");
@@ -142,7 +265,7 @@ test("renders twenty robots and allows scene selection", async ({
     await hook(
       request,
       `robot-${String(i).padStart(2, "0")}`,
-      "SessionStart",
+      "UserPromptSubmit",
       {},
       i % 2 ? "claude" : "codex",
     );
@@ -175,7 +298,7 @@ test("falls back to the same session list when WebGL is unavailable", async ({
   page,
   request,
 }) => {
-  await hook(request, "fallback", "SessionStart");
+  await hook(request, "fallback", "UserPromptSubmit");
   await page.addInitScript(() => {
     const original = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = function (
@@ -199,7 +322,7 @@ test("live events keep panel scroll and selection stable", async ({
   page,
   request,
 }) => {
-  await hook(request, "alpha", "SessionStart");
+  await hook(request, "alpha", "UserPromptSubmit");
   for (let i = 0; i < 35; i++)
     await hook(request, "alpha", "PreToolUse", {
       tool_use_id: `call-${i}`,
@@ -229,7 +352,7 @@ test("observed hook changes reach the panel within the latency budget", async ({
   page,
   request,
 }) => {
-  await hook(request, "latency", "SessionStart");
+  await hook(request, "latency", "UserPromptSubmit");
   await page.goto(`/?view=list#token=${UI_TOKEN}`);
   await page.getByTestId("session-codex:latency").click();
   const samples: number[] = [];
