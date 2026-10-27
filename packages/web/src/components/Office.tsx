@@ -14,12 +14,11 @@ import {
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   Html,
-  Instance,
-  Instances,
+  createInstances,
   OrbitControls,
   RoundedBox,
 } from "@react-three/drei";
-import { Group, Mesh, Vector3 } from "three";
+import { BoxGeometry, Group, Vector3, MOUSE, TOUCH } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { Bot, Focus, Minus, Plus } from "lucide-react";
 import { sessionStatus, type Session } from "@agentwatch/shared";
@@ -36,9 +35,23 @@ type Props = {
 };
 type Seat = [number, number, number];
 type Controls = { target: Vector3; update: () => void };
+const HOME: Seat = [26, 27, 30];
+const [SolidInstances, Solid] = createInstances();
+const [GlowInstances, Glow] = createInstances();
+const [SoftInstances, Soft] = createInstances();
+const [FoliageInstances, Foliage] = createInstances();
+const [PotInstances, Pot] = createInstances();
+const [OrbInstances, Orb] = createInstances();
+const [HeadInstances, Head] = createInstances();
 declare global {
   interface Window {
-    __agentwatchPerformance?: { fps: number; frames: number; calls: number };
+    __agentwatchPerformance?: {
+      fps: number;
+      frames: number;
+      calls: number;
+      triangles: number;
+      dpr: number;
+    };
   }
 }
 
@@ -80,17 +93,21 @@ function Box({
   emissive?: string;
   emissiveIntensity?: number;
 }) {
-  return <Instance position={position} scale={size} color={color} />;
+  return props.emissive ? (
+    <Glow position={position} scale={size} color={color} />
+  ) : rounded ? (
+    <Soft position={position} scale={size} color={color} />
+  ) : (
+    <Solid position={position} scale={size} color={color} />
+  );
 }
+
 function Plant({ position, scale = 1 }: { position: Seat; scale?: number }) {
   return (
     <group position={position} scale={scale}>
-      <mesh position={[0, 0.25, 0]} castShadow>
-        <cylinderGeometry args={[0.29, 0.23, 0.5, 8]} />
-        <meshStandardMaterial color="#d3bd9c" roughness={0.9} />
-      </mesh>
+      <Pot position={[0, 0.25, 0]} color="#d3bd9c" />
       {[0, 1, 2, 3, 4].map((i) => (
-        <mesh
+        <Foliage
           key={i}
           position={[
             Math.sin(i * 2.4) * 0.18,
@@ -98,133 +115,509 @@ function Plant({ position, scale = 1 }: { position: Seat; scale?: number }) {
             Math.cos(i * 2.4) * 0.18,
           ]}
           rotation={[i * 0.2, i * 2, -0.3 + i * 0.15]}
-          castShadow
-        >
-          <sphereGeometry args={[0.24, 6, 5]} />
-          <meshStandardMaterial
-            color={i % 2 ? "#527d5c" : "#6d9270"}
-            roughness={1}
-          />
-        </mesh>
+          color={i % 2 ? "#527d5c" : "#6d9270"}
+        />
       ))}
     </group>
   );
 }
 
-function Room() {
+function Chair({
+  position,
+  rotation = 0,
+  color = "#657b6c",
+}: {
+  position: Seat;
+  rotation?: number;
+  color?: string;
+}) {
   return (
-    <group>
-      <RoundedBox
-        args={[22, 0.55, 18]}
-        radius={0.3}
-        smoothness={2}
-        position={[0, -0.3, 0]}
-        receiveShadow
-      >
-        <meshStandardMaterial color="#a6a99a" roughness={0.95} />
-      </RoundedBox>
-      <Box position={[0, -0.02, 0]} size={[21.7, 0.06, 17.7]} color="#beb7a1" />
-      {Array.from({ length: 17 }, (_, i) => (
+    <group position={position} rotation={[0, rotation, 0]}>
+      <Box
+        position={[0, 0.55, 0]}
+        size={[0.78, 0.16, 0.75]}
+        color={color}
+        rounded
+      />
+      <Box
+        position={[0, 0.99, 0.32]}
+        size={[0.78, 0.78, 0.15]}
+        color={color}
+        rounded
+      />
+      <Box position={[0, 0.25, 0]} size={[0.1, 0.5, 0.1]} color="#364440" />
+      <Box position={[0, 0.09, 0]} size={[0.8, 0.07, 0.13]} color="#364440" />
+      <Box position={[0, 0.09, 0]} size={[0.13, 0.07, 0.8]} color="#364440" />
+      {[-0.44, 0.44].map((x) => (
         <Box
-          key={i}
-          position={[0, 0.016, -8 + i]}
-          size={[21.6, 0.008, 0.018]}
-          color="#afa892"
+          key={x}
+          position={[x, 0.78, 0.08]}
+          size={[0.09, 0.09, 0.48]}
+          color="#364440"
         />
       ))}
-      <Box position={[0, 1.25, -8.8]} size={[22, 2.5, 0.25]} color="#6e8077" />
-      <Box
-        position={[-10.85, 1.25, 0]}
-        size={[0.25, 2.5, 17.5]}
-        color="#839087"
+    </group>
+  );
+}
+
+function Glass({ position, size }: { position: Seat; size: Seat }) {
+  return (
+    <mesh position={position}>
+      <boxGeometry args={size} />
+      <meshStandardMaterial
+        color="#bddbd0"
+        transparent
+        opacity={0.13}
+        roughness={0.12}
+        depthWrite={false}
       />
-      <Box position={[0, 2.52, -8.8]} size={[22, 0.12, 0.35]} color="#abb29e" />
+    </mesh>
+  );
+}
+
+function Sofa({
+  position,
+  rotation = 0,
+}: {
+  position: Seat;
+  rotation?: number;
+}) {
+  return (
+    <group position={position} rotation={[0, rotation, 0]}>
       <Box
-        position={[-10.85, 2.52, 0]}
-        size={[0.35, 0.12, 17.6]}
-        color="#abb29e"
+        position={[0, 0.44, 0]}
+        size={[3.4, 0.65, 1.25]}
+        color="#6d8872"
+        rounded
       />
-      {[-6.5, 0, 6.5].map((x) => (
-        <group key={x} position={[x, 1.5, -8.6]}>
-          <Box position={[0, 0, 0]} size={[3.8, 1.55, 0.12]} color="#3c514e" />
+      <Box
+        position={[0, 0.99, -0.53]}
+        size={[3.4, 1.05, 0.3]}
+        color="#58715f"
+        rounded
+      />
+      {[-1.53, 1.53].map((x) => (
+        <Box
+          key={x}
+          position={[x, 0.8, 0]}
+          size={[0.32, 0.72, 1.3]}
+          color="#58715f"
+          rounded
+        />
+      ))}
+      {[-0.98, 0, 0.98].map((x) => (
+        <Box
+          key={x}
+          position={[x, 0.81, 0.04]}
+          size={[0.91, 0.2, 0.96]}
+          color="#8a9d7d"
+          rounded
+        />
+      ))}
+      {[-1.2, 1.2].map((x) => (
+        <group
+          key={x}
+          position={[x, 1.03, -0.22]}
+          rotation={[0.15, 0, x > 0 ? -0.17 : 0.17]}
+        >
           <Box
-            position={[0, 0, 0.09]}
-            size={[3.5, 1.3, 0.04]}
-            color="#9bb1a0"
-            roughness={0.25}
-            emissive="#668578"
-            emissiveIntensity={0.15}
-          />
-          <Box
-            position={[0, 0, 0.14]}
-            size={[0.09, 1.4, 0.05]}
-            color="#4f655d"
-          />
-          <Box
-            position={[0, 0, 0.14]}
-            size={[3.6, 0.08, 0.05]}
-            color="#4f655d"
+            position={[0, 0, 0]}
+            size={[0.48, 0.45, 0.19]}
+            color={x > 0 ? "#ceaa75" : "#c6c6a8"}
+            rounded
           />
         </group>
       ))}
-      <Plant position={[-9.5, 0.02, -7]} scale={1.35} />
-      <Plant position={[9.7, 0.02, -7]} scale={1.5} />
-      <Plant position={[9.6, 0.02, 7]} scale={1.15} />
-      <group position={[-9.25, 0, 4.7]}>
+      {[-1.25, 1.25].flatMap((x) =>
+        [-0.4, 0.4].map((z) => (
+          <Box
+            key={`${x}:${z}`}
+            position={[x, 0.12, z]}
+            size={[0.1, 0.24, 0.1]}
+            color="#364440"
+          />
+        )),
+      )}
+    </group>
+  );
+}
+
+function Room({ rows }: { rows: number }) {
+  const depth = Math.max(20, rows * 3.25 + 3);
+  const back = -depth / 2;
+  return (
+    <group>
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, -0.64, 0]}
+        receiveShadow
+      >
+        <planeGeometry args={[200, 200]} />
+        <meshLambertMaterial color="#65766c" />
+      </mesh>
+      <RoundedBox
+        args={[26, 0.6, depth]}
+        radius={0.14}
+        smoothness={2}
+        position={[0, -0.32, 0]}
+        receiveShadow
+      >
+        <meshStandardMaterial color="#b1b4a2" roughness={0.9} />
+      </RoundedBox>
+      <Box
+        position={[0, 0.015, 0]}
+        size={[25.7, 0.05, depth - 0.3]}
+        color="#c5aa82"
+      />
+      {Array.from({ length: Math.ceil(depth / 0.65) }, (_, i) => (
+        <group key={i}>
+          <Box
+            position={[0, 0.045, back + 0.33 + i * 0.65]}
+            size={[25.6, 0.008, 0.018]}
+            color="#ac9472"
+          />
+          {[-8, -1.5, 5, 11.5].map((x) => (
+            <Box
+              key={x}
+              position={[x + (i % 2 ? 1.6 : 0), 0.047, back + 0.65 + i * 0.65]}
+              size={[0.015, 0.008, 0.62]}
+              color="#b29a77"
+            />
+          ))}
+        </group>
+      ))}
+      {/* Two full-height walls leave the front of the room open to the camera. */}
+      <Box
+        position={[0, 1.9, back + 0.12]}
+        size={[26, 3.8, 0.24]}
+        color="#d5d8c9"
+      />
+      <Box
+        position={[-12.88, 1.9, 0]}
+        size={[0.24, 3.8, depth]}
+        color="#abb9a7"
+      />
+      <Box
+        position={[0, 0.18, back + 0.28]}
+        size={[25.7, 0.25, 0.09]}
+        color="#768476"
+      />
+      <Box
+        position={[-12.7, 0.18, 0]}
+        size={[0.08, 0.25, depth - 0.3]}
+        color="#768476"
+      />
+      <Box
+        position={[0, 3.82, back + 0.12]}
+        size={[26, 0.1, 0.32]}
+        color="#e0dfcd"
+      />
+      <Box
+        position={[-12.88, 3.82, 0]}
+        size={[0.32, 0.1, depth]}
+        color="#c4cbb7"
+      />
+      {[-8.8, -2.9, 3, 8.9].map((x) => (
+        <group key={x} position={[x, 2.25, back + 0.3]}>
+          <Box position={[0, 0, 0]} size={[4.7, 2.25, 0.16]} color="#455b53" />
+          <Box
+            position={[0, 0, 0.1]}
+            size={[4.44, 2.01, 0.035]}
+            color="#b5cfc0"
+            emissive="#b4d2c4"
+            emissiveIntensity={0.3}
+            roughness={0.35}
+          />
+          {[-0.78, 0.78].map((dx) => (
+            <Box
+              key={dx}
+              position={[dx, 0, 0.15]}
+              size={[0.07, 2.1, 0.06]}
+              color="#455b53"
+            />
+          ))}
+          <Box
+            position={[0, -0.2, 0.15]}
+            size={[4.5, 0.06, 0.06]}
+            color="#455b53"
+          />
+          <Box
+            position={[0, -1.18, 0.13]}
+            size={[4.9, 0.11, 0.47]}
+            color="#dcd9bd"
+          />
+        </group>
+      ))}
+      {/* Woven carpet anchors the work area. */}
+      <Box
+        position={[-0.2, 0.065, 0.35]}
+        size={[14.4, 0.04, depth - 3]}
+        color="#899681"
+        rounded
+      />
+      <Box
+        position={[-0.2, 0.09, 0.35]}
+        size={[14, 0.012, depth - 3.4]}
+        color="#96a08a"
+      />
+      {[-6.9, 6.5].map((x) => (
         <Box
-          position={[0, 0.35, 0]}
-          size={[1.7, 0.6, 3.3]}
-          color="#5d7c71"
+          key={x}
+          position={[x, 0.1, 0.35]}
+          size={[0.04, 0.01, depth - 3.5]}
+          color="#b0b59c"
+        />
+      ))}
+      {/* Glass meeting room on the right, with a door-sized opening. */}
+      <group position={[9.6, 0, back + 4.4]}>
+        <Box position={[0, 0.07, 0]} size={[5.5, 0.04, 6.6]} color="#758b80" />
+        <Glass position={[-2.7, 1.6, -0.8]} size={[0.055, 3.2, 4.9]} />
+        <Glass position={[0, 1.6, 3.25]} size={[5.4, 3.2, 0.055]} />
+        {[-3.2, -0.8, 1.6].map((z) => (
+          <Box
+            key={z}
+            position={[-2.7, 1.6, z]}
+            size={[0.065, 3.2, 0.065]}
+            color="#495e54"
+          />
+        ))}
+        {[-2.7, 0, 2.7].map((x) => (
+          <Box
+            key={x}
+            position={[x, 1.6, 3.25]}
+            size={[0.065, 3.2, 0.065]}
+            color="#495e54"
+          />
+        ))}
+        <Box
+          position={[-2.7, 3.22, -0.8]}
+          size={[0.09, 0.09, 4.95]}
+          color="#495e54"
+        />
+        <Box
+          position={[0, 3.22, 3.25]}
+          size={[5.5, 0.09, 0.09]}
+          color="#495e54"
+        />
+        <Box
+          position={[0, 1.15, 0]}
+          size={[2.25, 0.18, 3.9]}
+          color="#d6c3a0"
+          rounded
+        />
+        {[-1.25, 1.25].map((z) => (
+          <Box
+            key={z}
+            position={[0, 0.55, z]}
+            size={[1.4, 1.1, 0.15]}
+            color="#475a4d"
+          />
+        ))}
+        {[-1.15, 1.15].flatMap((z) =>
+          [-1, 1].map((side) => (
+            <Chair
+              key={`${z}:${side}`}
+              position={[side * 1.75, 0, z]}
+              rotation={(side * Math.PI) / 2}
+              color="#596e67"
+            />
+          )),
+        )}
+        <Box
+          position={[0, 1.26, -0.2]}
+          size={[0.75, 0.04, 0.52]}
+          color="#526c65"
           rounded
         />
         <Box
-          position={[-0.65, 0.95, 0]}
-          size={[0.4, 1.1, 3.3]}
-          color="#5b776d"
-          rounded
+          position={[0.5, 1.29, 0.8]}
+          size={[0.28, 0.1, 0.36]}
+          color="#d1aa73"
         />
-        <Box
-          position={[0.05, 0.73, -1.35]}
-          size={[1.5, 0.7, 0.45]}
-          color="#678579"
-          rounded
-        />
-        <Box
-          position={[0.05, 0.73, 1.35]}
-          size={[1.5, 0.7, 0.45]}
-          color="#678579"
-          rounded
-        />
+        <Plant position={[1.95, 0.08, -2.4]} scale={1.3} />
       </group>
-      <group position={[-9.25, 0, 0.8]}>
+      {/* Kitchenette and open shelves on the left. */}
+      <group position={[-10.1, 0, back + 2.4]}>
+        <Box position={[0, 0.63, 0]} size={[4.2, 1.25, 1.55]} color="#607c6a" />
+        {[-1.4, 0, 1.4].map((x) => (
+          <group key={x}>
+            <Box
+              position={[x, 0.63, 0.79]}
+              size={[1.33, 1.12, 0.05]}
+              color="#80917a"
+            />
+            <Box
+              position={[x, 0.94, 0.84]}
+              size={[0.32, 0.04, 0.06]}
+              color="#c5c6ad"
+            />
+          </group>
+        ))}
+        <Box position={[0, 1.3, 0]} size={[4.35, 0.14, 1.65]} color="#d8ceb0" />
         <Box
-          position={[0, 0.65, 0]}
-          size={[1.5, 1.3, 1.3]}
-          color="#a79072"
+          position={[-0.95, 1.69, -0.18]}
+          size={[0.8, 0.67, 0.65]}
+          color="#35463f"
           rounded
         />
-        <Box position={[0, 1.35, 0]} size={[1.6, 0.12, 1.4]} color="#d5c2a2" />
         <Box
-          position={[0, 1.68, 0]}
-          size={[0.7, 0.6, 0.65]}
-          color="#394a46"
-          rounded
-        />
-        <Box
-          position={[0, 1.74, 0.34]}
-          size={[0.35, 0.25, 0.02]}
-          color="#778b78"
-          emissive="#8ba58e"
+          position={[-0.95, 1.78, 0.16]}
+          size={[0.55, 0.3, 0.025]}
+          color="#94b09c"
+          emissive="#94b09c"
           emissiveIntensity={0.3}
         />
+        <Box
+          position={[-0.95, 1.4, 0.35]}
+          size={[0.68, 0.07, 0.4]}
+          color="#55655a"
+        />
+        <Box
+          position={[-0.95, 1.53, 0.29]}
+          size={[0.18, 0.2, 0.18]}
+          color="#d7c2a0"
+          rounded
+        />
+        <Box
+          position={[0.8, 1.39, 0]}
+          size={[1.2, 0.05, 0.85]}
+          color="#89998a"
+          rounded
+        />
+        <Box
+          position={[0.8, 1.69, -0.28]}
+          size={[0.06, 0.58, 0.06]}
+          color="#53675b"
+        />
+        <Box
+          position={[0.8, 1.97, -0.1]}
+          size={[0.06, 0.06, 0.42]}
+          color="#53675b"
+        />
+        <Box
+          position={[0, 2.7, -0.63]}
+          size={[4.5, 0.12, 0.75]}
+          color="#a88d66"
+        />
+        {[-1.8, -1.55, -1.3, 0.7, 0.95].map((x, i) => (
+          <Box
+            key={x}
+            position={[x, 2.99, -0.55]}
+            size={[0.17, 0.48 + (i % 2) * 0.13, 0.38]}
+            color={["#8e9f8c", "#beaa80", "#6d8580"][i % 3]}
+          />
+        ))}
+        <Plant position={[1.6, 2.76, -0.5]} scale={0.45} />
       </group>
-      <Box
-        position={[0, 0.025, 0.3]}
-        size={[19, 0.025, 14.3]}
-        color="#8c988b"
-      />
-      <Box position={[0, 0.04, 0.3]} size={[18.7, 0.02, 14]} color="#939f90" />
-      <Plant position={[-9.5, 0.05, 7.4]} scale={1.1} />
+      {/* A lived-in lounge, separate from the working floor. */}
+      <group position={[-9.8, 0, 4.7]}>
+        <Box
+          position={[0, 0.07, 0.9]}
+          size={[5.2, 0.035, 6.3]}
+          color="#b7b79c"
+          rounded
+        />
+        <Sofa position={[-1.25, 0, 0.6]} rotation={Math.PI / 2} />
+        <Sofa position={[0.2, 0, -1.8]} />
+        <RoundedBox
+          args={[1.8, 0.15, 2.3]}
+          radius={0.24}
+          smoothness={3}
+          position={[0.6, 0.64, 0.65]}
+          castShadow
+          receiveShadow
+        >
+          <meshStandardMaterial color="#bb9a6d" roughness={0.7} />
+        </RoundedBox>
+        <Box
+          position={[0.6, 0.33, 0.65]}
+          size={[0.8, 0.6, 1.25]}
+          color="#8c7759"
+        />
+        <Box
+          position={[0.45, 0.75, 0.45]}
+          size={[0.65, 0.06, 0.8]}
+          color="#e0d8b8"
+        />
+        <Box
+          position={[0.55, 0.81, 0.37]}
+          size={[0.57, 0.05, 0.65]}
+          color="#658378"
+        />
+        <Plant position={[1.7, 0.08, 3.1]} scale={1.25} />
+      </group>
+      {/* Slatted sideboard and a reading corner. */}
+      <group position={[9.6, 0, 5.5]}>
+        <Box position={[0, 0.6, 2.6]} size={[4.7, 1.15, 1.1]} color="#a78b63" />
+        {Array.from({ length: 24 }, (_, i) => (
+          <Box
+            key={i}
+            position={[-2.2 + i * 0.19, 0.6, 3.18]}
+            size={[0.07, 1.06, 0.08]}
+            color="#c1a276"
+          />
+        ))}
+        <Box
+          position={[0, 1.23, 2.6]}
+          size={[4.85, 0.13, 1.2]}
+          color="#ddc8a1"
+        />
+        <Plant position={[1.5, 1.3, 2.6]} scale={0.65} />
+        <Box
+          position={[-1, 1.39, 2.6]}
+          size={[0.9, 0.2, 0.55]}
+          color="#d6c8a7"
+        />
+        <Box
+          position={[-1.05, 1.53, 2.6]}
+          size={[0.8, 0.07, 0.5]}
+          color="#607f74"
+        />
+        <Chair position={[-0.9, 0, -0.2]} rotation={-0.4} color="#bb9f75" />
+        <Chair position={[1.05, 0, -0.2]} rotation={0.4} color="#bb9f75" />
+        <Box
+          position={[0, 0.55, -1.8]}
+          size={[1.4, 0.12, 1.2]}
+          color="#c7b18b"
+          rounded
+        />
+        <Box
+          position={[0, 0.28, -1.8]}
+          size={[0.12, 0.55, 0.12]}
+          color="#53665a"
+        />
+      </group>
+      <Plant position={[-11.8, 0.05, back + 5]} scale={1.5} />
+      <Plant position={[11.6, 0.05, 1.8]} scale={1.65} />
+      <Plant position={[-11.8, 0.05, -0.3]} scale={1.4} />
+      {/* Suspended linear lights model the ceiling without hiding the floor. */}
+      {[-4.3, 2.5].map((x) => (
+        <group key={x} position={[x, 4.6, -2]}>
+          <Box
+            position={[0, 0.9, -3]}
+            size={[0.025, 1.8, 0.025]}
+            color="#53635a"
+          />
+          <Box
+            position={[0, 0.9, 3]}
+            size={[0.025, 1.8, 0.025]}
+            color="#53635a"
+          />
+          <Box
+            position={[0, 0, 0]}
+            size={[0.22, 0.16, 7]}
+            color="#46594f"
+            rounded
+          />
+          <Box
+            position={[0, -0.095, 0]}
+            size={[0.16, 0.035, 6.8]}
+            color="#eee6bd"
+            emissive="#eee6bd"
+            emissiveIntensity={0.65}
+          />
+        </group>
+      ))}
     </group>
   );
 }
@@ -238,8 +631,7 @@ const Robot = memo(function Robot({
 }) {
   const body = useRef<Group>(null),
     left = useRef<Group>(null),
-    right = useRef<Group>(null),
-    antenna = useRef<Mesh>(null);
+    right = useRef<Group>(null);
   const status = sessionStatus(session),
     codex = session.provider === "codex";
   const shell = codex ? "#c3d5c5" : "#d7b6a0",
@@ -302,15 +694,7 @@ const Robot = memo(function Robot({
         color={accent}
         rounded
       />
-      <RoundedBox
-        args={[0.88, 0.7, 0.62]}
-        radius={codex ? 0.16 : 0.1}
-        smoothness={3}
-        position={[0, 1.34, 0]}
-        castShadow
-      >
-        <meshStandardMaterial color={shell} roughness={0.65} />
-      </RoundedBox>
+      <Head position={[0, 1.34, 0]} scale={[0.88, 0.7, 0.62]} color={shell} />
       <Box
         position={[0, 1.34, 0.325]}
         size={[0.66, 0.31, 0.03]}
@@ -318,28 +702,14 @@ const Robot = memo(function Robot({
         rounded
       />
       {[-0.17, 0.17].map((x) => (
-        <mesh key={x} position={[x, 1.36, 0.35]}>
-          <sphereGeometry args={[0.058, 8, 6]} />
-          <meshStandardMaterial
-            color={light}
-            emissive={light}
-            emissiveIntensity={0.6}
-          />
-        </mesh>
+        <Orb key={x} position={[x, 1.36, 0.35]} scale={0.058} color={light} />
       ))}
       <Box
         position={[0, 1.65, 0]}
         size={[0.045, 0.25, 0.045]}
         color="#526b5e"
       />
-      <mesh ref={antenna} position={[0, 1.82, 0]}>
-        <sphereGeometry args={[0.065, 8, 6]} />
-        <meshStandardMaterial
-          color={accent}
-          emissive={accent}
-          emissiveIntensity={status === "working" ? 0.5 : 0.1}
-        />
-      </mesh>
+      <Orb position={[0, 1.82, 0]} scale={0.065} color={accent} />
       <group ref={left} position={[-0.43, 0.88, 0]}>
         <Box
           position={[0, -0.22, 0.08]}
@@ -383,7 +753,7 @@ const Desk = memo(function Desk({
   onSelect,
   portal,
 }: {
-  session: Session;
+  session?: Session;
   seat: Seat;
   selected: boolean;
   labels: boolean;
@@ -391,7 +761,7 @@ const Desk = memo(function Desk({
   onSelect: Props["onSelect"];
   portal: RefObject<HTMLDivElement | null>;
 }) {
-  const status = sessionStatus(session),
+  const status = session ? sessionStatus(session) : "ended",
     screen =
       status === "working"
         ? "#71c6a1"
@@ -404,12 +774,14 @@ const Desk = memo(function Desk({
       position={seat}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect(session.key);
+        if (session && e.delta <= 5) onSelect(session.key);
       }}
       onPointerOver={(e) => {
         e.stopPropagation();
-        setHovered(true);
-        document.body.style.cursor = "pointer";
+        if (session) {
+          setHovered(true);
+          document.body.style.cursor = "pointer";
+        }
       }}
       onPointerOut={() => {
         setHovered(false);
@@ -485,7 +857,7 @@ const Desk = memo(function Desk({
       <Box
         position={[0.92, 1.36, -0.3]}
         size={[0.16, 0.22, 0.16]}
-        color={session.provider === "codex" ? "#a6c1a6" : "#c59b74"}
+        color={session?.provider === "codex" ? "#a6c1a6" : "#c59b74"}
         rounded
       />
       <Box
@@ -495,10 +867,23 @@ const Desk = memo(function Desk({
         rounded
       />
       <Box position={[0, 0.22, 0.95]} size={[0.1, 0.5, 0.1]} color="#3e5348" />
-      <group position={[0, 0.6, 0.7]} scale={0.8}>
-        <Robot session={session} reducedMotion={reducedMotion} />
-      </group>
-      {(labels || selected || hovered) && (
+      <Box
+        position={[0, 1.03, 1.32]}
+        size={[0.8, 0.8, 0.12]}
+        color="#526b5d"
+        rounded
+      />
+      <Box
+        position={[0, 0.17, 0.95]}
+        size={[0.8, 0.07, 0.12]}
+        color="#3e5348"
+      />
+      {session && (
+        <group position={[0, 0.6, 0.7]} scale={0.8}>
+          <Robot session={session} reducedMotion={reducedMotion} />
+        </group>
+      )}
+      {session && (labels || selected || hovered) && (
         <Html
           portal={portal as RefObject<HTMLElement>}
           center
@@ -545,43 +930,64 @@ function CameraRig({
   focus,
   action,
   reduced,
+  rows,
 }: {
   focus: Seat | undefined;
   action: { type: string; id: number };
   reduced: boolean;
+  rows: number;
 }) {
-  const { camera, size, invalidate } = useThree(),
-    controls = useRef<Controls | null>(null);
+  const { camera, size, invalidate } = useThree();
+  const controls = useRef<Controls | null>(null);
+  const depth = Math.max(20, rows * 3.25 + 3);
+  const portrait = size.width < size.height * 0.75;
+  const home = useMemo<Seat>(() => (portrait ? [38, 48, 4] : HOME), [portrait]);
+  const baseZoom = portrait
+    ? Math.min(size.width / (depth * 1.08), size.height / 32)
+    : Math.min(
+        size.width / (21 + depth * 0.7),
+        size.height / (19 + depth * 0.38),
+      );
+  useEffect(() => {
+    camera.position.set(...home);
+    camera.lookAt(0, 0.8, 0);
+    controls.current?.update();
+    invalidate();
+  }, [home, camera, invalidate]);
   const goal = useRef<{ target: Vector3; zoom: number } | null>(null);
-  const baseZoom = Math.min(size.width / 31, size.height / 20.5);
   useEffect(() => {
     goal.current = {
       target: focus
         ? new Vector3(focus[0], 0.8, focus[2])
-        : new Vector3(0, 0, 0),
-      zoom: focus ? baseZoom * 1.4 : baseZoom,
+        : new Vector3(0, 0.8, 0),
+      zoom: focus ? baseZoom * 1.65 : baseZoom,
     };
     invalidate();
   }, [focus?.[0], focus?.[2], baseZoom, invalidate]);
   useEffect(() => {
     if (!action.id) return;
-    if (action.type === "reset")
-      goal.current = { target: new Vector3(0, 0, 0), zoom: baseZoom };
-    else {
+    if (action.type === "reset") {
+      goal.current = null;
+      camera.position.set(...home);
+      controls.current?.target.set(0, 0.8, 0);
+      camera.zoom = baseZoom;
+      camera.lookAt(0, 0.8, 0);
+      controls.current?.update();
+    } else {
+      goal.current = null;
       camera.zoom *= action.type === "in" ? 1.2 : 1 / 1.2;
       camera.zoom = Math.max(
-        baseZoom * 0.6,
-        Math.min(baseZoom * 3, camera.zoom),
+        baseZoom * 0.55,
+        Math.min(baseZoom * 4, camera.zoom),
       );
-      camera.updateProjectionMatrix();
-      goal.current = null;
     }
+    camera.updateProjectionMatrix();
     invalidate();
-  }, [action, baseZoom, camera, invalidate]);
+  }, [action, baseZoom, camera, home, invalidate]);
   useFrame((_, delta) => {
     if (!goal.current || !controls.current) return;
-    const alpha = reduced ? 1 : 1 - Math.exp(-delta * 7),
-      old = controls.current.target.clone();
+    const alpha = reduced ? 1 : 1 - Math.exp(-delta * 7);
+    const old = controls.current.target.clone();
     controls.current.target.lerp(goal.current.target, alpha);
     camera.position.add(controls.current.target.clone().sub(old));
     camera.zoom += (goal.current.zoom - camera.zoom) * alpha;
@@ -600,13 +1006,22 @@ function CameraRig({
         controls.current = value;
       }}
       makeDefault
-      enableRotate={false}
+      enableRotate
       enablePan
       enableZoom
+      target={[0, 0.8, 0]}
       enableDamping={!reduced}
       dampingFactor={0.12}
-      minZoom={baseZoom * 0.6}
-      maxZoom={baseZoom * 3}
+      minPolarAngle={0.22}
+      maxPolarAngle={Math.PI / 2.12}
+      minZoom={baseZoom * 0.55}
+      maxZoom={baseZoom * 4}
+      mouseButtons={{
+        LEFT: MOUSE.ROTATE,
+        MIDDLE: MOUSE.DOLLY,
+        RIGHT: MOUSE.PAN,
+      }}
+      touches={{ ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }}
       onStart={() => {
         goal.current = null;
       }}
@@ -614,13 +1029,28 @@ function CameraRig({
   );
 }
 
-function PerformanceMeter({ onLowFps }: { onLowFps: () => void }) {
+function PerformanceMeter({
+  onLowFps,
+  continuous,
+}: {
+  onLowFps: () => void;
+  continuous: boolean;
+}) {
   const stats = useRef({ start: 0, count: 0, frames: 0, slowSamples: 0 });
   useFrame(({ gl }) => {
     const now = performance.now(),
       s = stats.current;
     s.frames++;
     s.count++;
+    window.__agentwatchPerformance = {
+      fps: window.__agentwatchPerformance?.fps ?? 0,
+      frames: s.frames,
+      calls: gl.info.render.calls,
+      triangles: gl.info.render.triangles,
+      dpr: gl.getPixelRatio(),
+    };
+    // Demand rendering intentionally pauses. Idle time is not a slow frame.
+    if (!continuous) return;
     if (!s.start) s.start = now;
     if (now - s.start > 1000) {
       const fps = Math.round((s.count * 1000) / (now - s.start));
@@ -628,6 +1058,8 @@ function PerformanceMeter({ onLowFps }: { onLowFps: () => void }) {
         fps,
         frames: s.frames,
         calls: gl.info.render.calls,
+        triangles: gl.info.render.triangles,
+        dpr: gl.getPixelRatio(),
       };
       s.slowSamples = fps < 32 ? s.slowSamples + 1 : 0;
       if (s.slowSamples >= 2) {
@@ -646,11 +1078,22 @@ export default function Office(props: Props) {
   const portal = useRef<HTMLDivElement>(null);
   const [pixelRatio, setPixelRatio] = useState(1);
   const lowerQuality = useCallback(
-    () => setPixelRatio((value) => Math.max(0.6, value * 0.8)),
+    () => setPixelRatio((value) => Math.max(0.45, value * 0.75)),
     [],
   );
   const shadows = props.sessions.length <= 8 && pixelRatio >= 1;
-  const geometry = useMemo(() => new RoundedBoxGeometry(1, 1, 1, 1, 0.035), []);
+  const geometry = useMemo(() => new BoxGeometry(1, 1, 1), []);
+  const softGeometry = useMemo(
+    () => new RoundedBoxGeometry(1, 1, 1, 1, 0.06),
+    [],
+  );
+  useEffect(
+    () => () => {
+      geometry.dispose();
+      softGeometry.dispose();
+    },
+    [geometry, softGeometry],
+  );
   const seats = useRef(new Map<string, Seat>()),
     pointer = useRef({ x: 0, y: 0, dragged: false });
   const allKeys = props.allSessions.map((s) => s.key).join("|");
@@ -665,9 +1108,9 @@ export default function Office(props: Props) {
       if (seats.current.has(session.key)) continue;
       for (let i = 0; ; i++) {
         const seat: Seat = [
-          ((i % 5) - 2) * 3.5,
+          -5.2 + (i % 4) * 3.4,
           0,
-          (Math.floor(i / 5) - 1.5) * 3.45,
+          -5.9 + Math.floor(i / 4) * 3.25,
         ];
         const key = `${seat[0]}:${seat[2]}`;
         if (!taken.has(key)) {
@@ -678,12 +1121,34 @@ export default function Office(props: Props) {
       }
     }
   }, [allKeys]);
+  const occupied = new Map(
+    props.sessions.map((s) => {
+      const seat = seats.current.get(s.key) ?? [0, 0, 0];
+      return [`${seat[0]}:${seat[2]}`, s] as const;
+    }),
+  );
+  const maxRow = Math.max(
+    4,
+    ...[...seats.current.values()].map(
+      (seat) => Math.round((seat[2] + 5.9) / 3.25) + 1,
+    ),
+  );
+  const rows = Math.max(4, maxRow);
+  const furniture = Array.from({ length: rows * 4 }, (_, i) => {
+    const seat: Seat = [
+      -5.2 + (i % 4) * 3.4,
+      0,
+      -5.9 + Math.floor(i / 4) * 3.25,
+    ];
+    return { seat, session: occupied.get(`${seat[0]}:${seat[2]}`) };
+  });
   const setCamera = (type: string) =>
     setAction((a) => ({ type, id: a.id + 1 }));
   return (
     <SceneBoundary onFallback={props.onFallback}>
       <div
         className="office-canvas"
+        data-testid="office-canvas"
         onPointerDown={(e) => {
           pointer.current = { x: e.clientX, y: e.clientY, dragged: false };
         }}
@@ -700,20 +1165,25 @@ export default function Office(props: Props) {
         <div className="robot-overlays" ref={portal} />
         <Canvas
           orthographic
-          camera={{ position: [23, 27, 26], zoom: 28, near: 0.1, far: 150 }}
+          camera={{ position: HOME, zoom: 28, near: 0.1, far: 1000 }}
           dpr={pixelRatio}
           shadows={shadows}
           frameloop={props.reducedMotion ? "demand" : "always"}
-          gl={{ antialias: true, alpha: true, powerPreference: "low-power" }}
+          gl={{
+            antialias: true,
+            alpha: false,
+            powerPreference: "high-performance",
+          }}
           onPointerMissed={() => {
             if (!pointer.current.dragged) props.onSelect(null);
           }}
         >
-          <color attach="background" args={["#202b2b"]} />
-          <ambientLight intensity={1.5} color="#d5e1d5" />
+          <color attach="background" args={["#65766c"]} />
+          <hemisphereLight args={["#e4ecdf", "#8d826c", 2]} />
+          <ambientLight intensity={0.45} color="#e5e8d9" />
           <directionalLight
-            position={[4, 14, 7]}
-            intensity={2.8}
+            position={[3, 18, -5]}
+            intensity={3.2}
             color="#ffdfb2"
             castShadow={shadows}
             shadow-mapSize={[1024, 1024]}
@@ -729,27 +1199,60 @@ export default function Office(props: Props) {
             color="#a4d3c4"
           />
           <Suspense fallback={null}>
-            <Instances
-              limit={1500}
+            <SolidInstances
+              limit={Math.max(2200, furniture.length * 45 + 800)}
               geometry={geometry}
               castShadow
               receiveShadow
             >
-              <meshStandardMaterial color="white" roughness={0.85} />
-              <Room />
-              {props.sessions.map((s) => (
-                <Desk
-                  key={s.key}
-                  session={s}
-                  seat={seats.current.get(s.key) ?? [0, 0, 0]}
-                  selected={props.selectedKey === s.key}
-                  labels={props.labels}
-                  reducedMotion={props.reducedMotion}
-                  onSelect={props.onSelect}
-                  portal={portal}
-                />
-              ))}
-            </Instances>
+              <meshLambertMaterial color="white" />
+              <SoftInstances
+                limit={Math.max(500, furniture.length * 15)}
+                geometry={pixelRatio < 0.75 ? geometry : softGeometry}
+                castShadow
+                receiveShadow
+              >
+                <meshLambertMaterial />
+                <GlowInstances limit={Math.max(200, furniture.length * 5)}>
+                  <boxGeometry args={[1, 1, 1]} />
+                  <meshBasicMaterial />
+                  <FoliageInstances limit={100} castShadow>
+                    <sphereGeometry args={[0.24, 6, 5]} />
+                    <meshLambertMaterial />
+                    <PotInstances limit={24} castShadow>
+                      <cylinderGeometry args={[0.29, 0.23, 0.5, 8]} />
+                      <meshLambertMaterial />
+                      <OrbInstances limit={Math.max(100, furniture.length * 3)}>
+                        <sphereGeometry args={[1, 8, 6]} />
+                        <meshBasicMaterial />
+                        <HeadInstances
+                          limit={Math.max(100, furniture.length)}
+                          geometry={pixelRatio < 0.75 ? geometry : softGeometry}
+                          castShadow
+                        >
+                          <meshLambertMaterial />
+                          <Room rows={rows} />
+                          {furniture.map(({ seat, session }, i) => (
+                            <Desk
+                              key={i}
+                              session={session}
+                              seat={seat}
+                              selected={
+                                !!session && props.selectedKey === session.key
+                              }
+                              labels={props.labels}
+                              reducedMotion={props.reducedMotion}
+                              onSelect={props.onSelect}
+                              portal={portal}
+                            />
+                          ))}
+                        </HeadInstances>
+                      </OrbInstances>
+                    </PotInstances>
+                  </FoliageInstances>
+                </GlowInstances>
+              </SoftInstances>
+            </SolidInstances>
           </Suspense>
           <CameraRig
             focus={
@@ -759,28 +1262,37 @@ export default function Office(props: Props) {
             }
             action={action}
             reduced={props.reducedMotion}
+            rows={rows}
           />
-          <PerformanceMeter onLowFps={lowerQuality} />
+          <PerformanceMeter
+            onLowFps={lowerQuality}
+            continuous={!props.reducedMotion}
+          />
         </Canvas>
       </div>
       <div className="camera-controls">
-        <button aria-label="Наблизити" onClick={() => setCamera("in")}>
+        <button
+          aria-label="Наблизити"
+          title="Наблизити"
+          onClick={() => setCamera("in")}
+        >
           <Plus size={16} />
         </button>
-        <button aria-label="Віддалити" onClick={() => setCamera("out")}>
+        <button
+          aria-label="Віддалити"
+          title="Віддалити"
+          onClick={() => setCamera("out")}
+        >
           <Minus size={16} />
         </button>
         <span />
         <button
           aria-label="Показати весь офіс"
+          title="Показати весь офіс"
           onClick={() => setCamera("reset")}
         >
           <Focus size={16} />
         </button>
-      </div>
-      <div className="scene-caption">
-        <span className="tiny-dot" />
-        AGENTWATCH OFFICE <span>01</span>
       </div>
     </SceneBoundary>
   );
