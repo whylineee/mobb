@@ -9,7 +9,6 @@ export const ProviderSchema = z.enum(["codex", "claude"]);
 export type Provider = z.infer<typeof ProviderSchema>;
 export const MAX_TEXT = 65_536;
 export const MAX_HOOK_BYTES = 2 * 1024 * 1024;
-export const ENDED_VISIBLE_MS = 60_000;
 export const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 export const DEFAULT_PORT = 4317;
 
@@ -214,9 +213,10 @@ export function sessionStatus(session: Session): Activity | "ended" {
       : session.activity;
 }
 
-export function officeVisible(session: Session, now = Date.now()): boolean {
+export function officeVisible(session: Session): boolean {
   return (
-    session.lifecycle !== "ended" ||
-    now - (session.endedAt ?? 0) < ENDED_VISIBLE_MS
+    session.lifecycle === "open" &&
+    session.freshness === "fresh" &&
+    (session.activity === "working" || session.activity === "waiting")
   );
 }

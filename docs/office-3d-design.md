@@ -8,8 +8,11 @@ fallback. Session details appear only after selecting an agent, over the scene.
 Use the existing React Three Fiber / Three.js renderer. Model a furnished
 cutaway office with permanent workstations, a glass meeting room, lounge,
 kitchenette, shelving, plants, window frames and daylight shadows. No room
-image, external model, font or texture request. Active robots correspond only
-to real sessions, with stable seat assignments.
+image, external model, font or texture request. Robots represent only confirmed
+live sessions currently working on a task or waiting for input within that task.
+Historical, unknown, stale, idle and ended sessions do not create robots. A task
+completion removes its robot immediately while preserving the session history
+and any already-open details. Active sessions retain stable seat assignments.
 
 Palette: oak #c5aa82, sage #8e9b83, plaster #d5d8c9, graphite #364440,
 foliage #52775c, canvas #65766c. Existing system sans for small controls;

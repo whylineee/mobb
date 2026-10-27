@@ -29,6 +29,36 @@ test.beforeEach(async ({ request }) => {
   });
 });
 
+test("only current work creates an office agent", async ({ page, request }) => {
+  await hook(request, "current-work", "SessionStart");
+  await page.goto(`/#token=${UI_TOKEN}`);
+  await expect(page.getByText("Офіс поки порожній")).toBeVisible();
+  await expect(page.getByTestId("robot-label")).toHaveCount(0);
+  await hook(request, "current-work", "UserPromptSubmit", {
+    prompt: "Поточна задача",
+    turn_id: "current",
+  });
+  await expect(page.getByTestId("robot-label")).toHaveCount(1);
+  await page.getByTestId("robot-label").click();
+  await expect(page.getByTestId("session-panel")).toContainText(
+    "Поточна задача",
+  );
+  await hook(request, "current-work", "Stop", { turn_id: "current" });
+  await expect(page.getByTestId("robot-label")).toHaveCount(0);
+  await expect(page.getByTestId("panel-status")).toHaveText("Очікує запиту");
+  await expect(page.getByTestId("session-panel")).toContainText(
+    "Поточна задача",
+  );
+  await hook(request, "current-work", "UserPromptSubmit", {
+    prompt: "Нова задача",
+    turn_id: "next",
+  });
+  await expect(page.getByTestId("robot-label")).toHaveCount(1);
+  await hook(request, "current-work", "SessionEnd");
+  await expect(page.getByTestId("robot-label")).toHaveCount(0);
+  await expect(page.getByTestId("panel-status")).toHaveText("Завершено");
+});
+
 test.describe("compact markers and sharp Retina rendering", () => {
   test.use({ viewport: { width: 702, height: 762 }, deviceScaleFactor: 2 });
 
@@ -303,17 +333,15 @@ test("reconnect resyncs without duplicate sessions or timeline events", async ({
   await expect(page.getByTestId("timeline-event")).toHaveCount(2);
 });
 
-test("ended robots disappear after 60 seconds while their drawer stays open", async ({
+test("ended robots disappear immediately while their drawer stays open", async ({
   page,
   request,
 }) => {
-  await page.clock.install({ time: new Date() });
   await hook(request, "alpha", "UserPromptSubmit");
   await page.goto(`/?view=list#token=${UI_TOKEN}`);
   await page.getByTestId("session-codex:alpha").click();
   await hook(request, "alpha", "SessionEnd");
   await expect(page.getByTestId("panel-status")).toHaveText("Завершено");
-  await page.clock.fastForward(61000);
   await expect(page.getByTestId("session-codex:alpha")).toHaveCount(0);
   await expect(page.getByTestId("session-panel")).toContainText("alpha");
 });
