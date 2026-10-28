@@ -176,7 +176,7 @@ test.describe("compact markers and sharp Retina rendering", () => {
     page,
     request,
   }) => {
-    test.setTimeout(60000);
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     for (let i = 0; i < 20; i++)
       await hook(request, `sharp-${i}`, "UserPromptSubmit");
     await page.goto(`/#token=${UI_TOKEN}`);
@@ -253,21 +253,24 @@ test("office camera locks its angle, bounds panning, zooms and resets", async ({
   expect(locked.equals(home)).toBe(true);
   await page.getByRole("button", { name: "Наблизити", exact: true }).click();
   await page.mouse.move(760, 900);
+  await expect
+    .poll(async () => (await canvas.screenshot()).equals(home))
+    .toBe(false);
   const zoomed = await canvas.screenshot();
-  expect(zoomed.equals(home)).toBe(false);
   await page.mouse.move(760, 600);
   await page.mouse.down();
   await page.mouse.move(1260, 800, { steps: 12 });
   await page.mouse.up();
   await page.mouse.move(760, 900);
-  expect((await canvas.screenshot()).equals(zoomed)).toBe(false);
+  await expect
+    .poll(async () => (await canvas.screenshot()).equals(zoomed))
+    .toBe(false);
   await page.getByRole("button", { name: "Показати весь офіс" }).click();
   await page.mouse.move(760, 900);
-  expect(
-    (await canvas.screenshot({ path: "test-results/camera-reset.png" })).equals(
-      home,
-    ),
-  ).toBe(true);
+  await expect
+    .poll(async () => (await canvas.screenshot()).equals(home))
+    .toBe(true);
+  await canvas.screenshot({ path: "test-results/camera-reset.png" });
   await expect(canvas).toHaveJSProperty("clientWidth", 1440);
   await page.screenshot({ path: "test-results/office-3d-desktop.png" });
 });
@@ -435,7 +438,7 @@ test("renders twenty mascot agents within the animation budget and allows select
   page,
   request,
 }) => {
-  test.setTimeout(60000);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   for (let i = 0; i < 20; i++)
     await hook(
       request,
@@ -829,7 +832,7 @@ test("scene sleeps when static, stops in the background, and caps typing frames"
   page,
   request,
 }) => {
-  test.setTimeout(60000);
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   const frames = () =>
     page.evaluate(
       () =>
@@ -844,7 +847,11 @@ test("scene sleeps when static, stops in the background, and caps typing frames"
   expect((await frames()) - idleStart).toBe(0);
   await hook(request, "render-budget", "UserPromptSubmit");
   await expect(page.getByTestId("robot-label")).toHaveCount(1);
-  await page.waitForTimeout(300);
+  await expect
+    .poll(async () =>
+      page.evaluate(() => window.__agentwatchPerformance?.animationFps),
+    )
+    .toBe(20);
   const workingStart = await frames();
   const shadowStart = await page.evaluate(
     () =>
@@ -880,7 +887,11 @@ test("scene sleeps when static, stops in the background, and caps typing frames"
   await expect(
     page.getByTestId("robot-label").locator(".dot-waiting"),
   ).toHaveCount(1);
-  await page.waitForTimeout(300);
+  await expect
+    .poll(async () =>
+      page.evaluate(() => window.__agentwatchPerformance?.animationFps),
+    )
+    .toBe(0);
   const waitingStart = await frames();
   // Identical live signals update timestamps, not the 3D appearance.
   for (let i = 0; i < 3; i++)
@@ -897,7 +908,14 @@ test("scene sleeps when static, stops in the background, and caps typing frames"
     });
     document.dispatchEvent(new Event("visibilitychange"));
   });
-  await page.waitForTimeout(300);
+  // Let the visibility update commit and any already queued frame drain before
+  // measuring the hidden scene, even when the browser draws very slowly.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
   const hiddenStart = await frames();
   await page.waitForTimeout(1200);
   expect((await frames()) - hiddenStart).toBe(0);
@@ -910,7 +928,11 @@ test("scene sleeps when static, stops in the background, and caps typing frames"
   });
   await expect.poll(frames).toBeGreaterThan(hiddenStart);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.waitForTimeout(300);
+  await expect
+    .poll(async () =>
+      page.evaluate(() => window.__agentwatchPerformance?.animationFps),
+    )
+    .toBe(0);
   const reducedStart = await frames();
   await page.waitForTimeout(1200);
   expect((await frames()) - reducedStart).toBe(0);
