@@ -33,7 +33,7 @@ The local software-renderer sample after extraction measured 20 agents at 17 FPS
 - History limits count records, not bytes. Current snapshots of open sessions remain persistent and may retain private task/tool text older than the timeline. SQLite file size can retain free pages after row deletion; this change does not promise an exact disk/RAM quota.
 - The 7-day age sweep runs at startup and hourly; count limits are applied as events are ingested.
 - Real Claude/Codex settings and hooks were not changed for these checks. Tests use temporary directories and a separate fixture server; live authenticated external agents were not revalidated.
-- GitHub-hosted CI has not run locally. Its actual hosted status will be available after the branch is pushed.
+- At the time of the original local delivery, GitHub-hosted CI had not yet run. The first hosted result and the subsequent test correction are recorded below.
 - The implementation session’s codebase-memory transport was unavailable. The independent reviewer refreshed its graph to generation 2026-10-28T17:49:15Z and checked relevant source paths (metadata_match, no recorded issue). Final regression fixes were checked directly and with type/unit/browser checks; absolute graph completeness is not asserted.
 
 ## Final review
@@ -47,3 +47,7 @@ GPT-6.1 Sol independently reviewed `accfacf…1168bd8`. No Critical findings; tw
 The fix pass is verified by regression tests and the complete checks, without a second review. The original Astra reviewer was interrupted at the user's request and replaced by GPT-6.1 Sol; no Astra review was used as the delivery verdict.
 
 Delivery choices: reuse the existing checkout on a local feature branch rather than create another checkout; execute the approved plan natively without another permission round; leave integration/push outside this task. Preserve previously open snapshots independently of unknown liveness after restart (this can retain a snapshot until confirmed end); treat bulk-cleanup arrays as an Important bounded-memory issue and fix them. No review findings remain deferred.
+
+## CI frame pacing correction
+
+The first hosted macOS CI run reached all E2E scenarios, but three animation tests assumed at least 10 FPS or 180 frames within 30 seconds. That runner measured about 7 FPS, so these hardware-dependent assumptions failed. The tests now wait for the monitor to sample frames, verify animation liveness and its 20 FPS upper budget, retain the 12-render-call ceiling and Retina-size assertions, and report measured FPS without imposing a universal minimum. A local reproduction capped browser frame callbacks at about 5 FPS: two original scenarios failed and all three corrected scenarios passed. This does not establish a minimum FPS on physical hardware.
