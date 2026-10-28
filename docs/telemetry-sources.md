@@ -17,6 +17,16 @@ Baseline inspected on 2026-10-27: Node 24.22.1, Codex CLI 0.164.0, Codex desktop
 | Subagents | Hook `agent_id` / type; child session only when separately evidenced | Same | Same, often logical child only | Parent PID is not used to invent parent-child session relationships |
 | Previously open idle sessions | Unknown until a live signal or exact runtime evidence | Same | Same | Historical file presence alone cannot prove openness |
 
+## Token accounting (terminal dashboard)
+
+- Codex `event_msg/token_count.info.total_token_usage` is a cumulative checkpoint, not an additive event. `input_tokens` already includes cached input and `output_tokens` includes reasoning. Only differences between confirmed checkpoints are charged; equal replayed counters add nothing. Same-record corrections replace their original ledger contribution, including corrections to zero.
+- Historical records seed baselines without importing earlier consumption. A confirmed `SessionStart.source=startup` after monitoring begins permits a zero baseline for a genuinely new Codex session; `resume`, `fork`, `clear` and `compact` do not. After a daemon restart, previous totals remain, but fresh recovery rebases counters and leaves observation gaps visible.
+- Claude assistant records are keyed by session/agent/message ID. Input includes uncached, cache-read and cache-creation input once. Assistant output can be a message-start placeholder, so this adapter leaves output/reasoning/total unavailable rather than inventing final values. Actual local authenticated Claude usage remains unverified; fixture tests cover the documented shape.
+- Token observations do not establish session liveness. Parent-child identity requires explicit metadata; independently confirmed children can be active while the parent's own status is unknown. Restart resets retained logical children to unknown until their own live evidence arrives.
+- Usage and minute activity samples have independent seven-day retention; pruning raw events does not subtract accounted usage. Full-database analytics are independent of the 200-session web overview cap. Minute samples capture simultaneous counts per provider/project, and larger time buckets average observed minutes. Missing intervals remain unavailable.
+
+References checked through Context7: [Codex protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs), [Codex SessionStart schema](https://github.com/openai/codex/blob/main/codex-rs/hooks/src/schema.rs), [Claude usage semantics](https://code.claude.com/docs/en/agent-sdk/cost-tracking).
+
 ## Collection behavior
 
 - JSONL tailing buffers partial UTF-8 lines, bounds records, resumes offsets, detects rotation, truncation and in-place rewrites. Startup reads at most the last 2 MiB per file, plus identity metadata for large Codex rollouts. This is recovery, not a complete import of old transcripts.
