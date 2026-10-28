@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Clock3 } from "lucide-react";
 import type { AgentEvent } from "@agentwatch/shared";
 const eventLabels: Record<AgentEvent["kind"], string> = {
+  usage: "Використання токенів",
   "session.start": "Сесію відкрито",
   "session.end": "Сесію завершено",
   "session.metadata": "Дані сесії",

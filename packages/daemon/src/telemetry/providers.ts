@@ -6,6 +6,8 @@ import {
   type EventData,
   type EventKind,
   type Provider,
+  UsageSchema,
+  type Usage,
 } from "@agentwatch/shared";
 
 type Dict = Record<string, unknown>;
@@ -96,6 +98,7 @@ export function normalizeHook(
     name = str(raw.hook_event_name);
   const common: EventData = {
     cwd: str(raw.cwd),
+    model: str(raw.model),
     subagentId: str(raw.agent_id),
   };
   const ids = {
@@ -208,9 +211,24 @@ export function normalizeCodexRecord(
     });
   }
   if (type === "turn_context")
-    return emit("session.metadata", { cwd: str(p.cwd) });
+    return emit("session.metadata", { cwd: str(p.cwd), model: str(p.model) });
   if (type === "event_msg") {
     switch (p.type) {
+      case "token_count": {
+        const u = obj(obj(p.info).total_token_usage);
+        const usage = UsageSchema.safeParse({
+          key: "counter",
+          mode: "cumulative",
+          live: meta.live === true,
+          input: u.input_tokens,
+          output: u.output_tokens,
+          total: u.total_tokens,
+          cacheRead: u.cached_input_tokens ?? null,
+          cacheWrite: u.cache_write_input_tokens ?? null,
+          reasoning: u.reasoning_output_tokens ?? null,
+        });
+        return usage.success ? emit("usage", { usage: usage.data }) : [];
+      }
       case "task_started":
         return emit("turn.start", { confirmed: meta.live === true });
       case "task_complete":
@@ -267,6 +285,40 @@ export function normalizeClaudeRecord(
   };
   const content = msg.content;
   const result: AgentEvent[] = [];
+  if (raw.type === "assistant" && str(msg.id)) {
+    const u = obj(msg.usage);
+    const numbers = [
+      u.input_tokens,
+      u.cache_read_input_tokens ?? 0,
+      u.cache_creation_input_tokens ?? 0,
+    ];
+    if (
+      numbers.every(
+        (v) => typeof v === "number" && Number.isSafeInteger(v) && v >= 0,
+      )
+    ) {
+      // Assistant output can be a message_start placeholder. Do not present it as final usage.
+      const usage: Usage = {
+        key: String(msg.id),
+        mode: "message",
+        live: meta.live === true,
+        input: (numbers as number[]).reduce((a, b) => a + b, 0),
+        output: null,
+        total: null,
+        cacheRead: Number(u.cache_read_input_tokens ?? 0),
+        cacheWrite: Number(u.cache_creation_input_tokens ?? 0),
+        reasoning: null,
+      };
+      result.push(
+        ...event("claude", sessionId, "usage", "log", m, {
+          usage,
+          model: str(msg.model),
+          cwd: str(raw.cwd),
+          subagentId: str(raw.agentId),
+        }),
+      );
+    }
+  }
   if (
     raw.type === "user" &&
     typeof content === "string" &&
@@ -283,7 +335,7 @@ export function normalizeClaudeRecord(
       { turnId: str(raw.promptId) },
     );
   }
-  if (!Array.isArray(content)) return [];
+  if (!Array.isArray(content)) return result;
   for (let i = 0; i < content.length; i++) {
     const part = obj(content[i]),
       ids = {
