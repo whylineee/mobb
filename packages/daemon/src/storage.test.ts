@@ -5,6 +5,8 @@ import { join } from "node:path";
 import Database from "better-sqlite3";
 import { AgentService } from "./service.js";
 import { normalizeHook } from "./telemetry/providers.js";
+import { SessionStorage } from "./storage.js";
+import { reduceSession } from "./telemetry/reducer.js";
 
 const day = 86_400_000;
 let now = 20 * day;
@@ -137,4 +139,47 @@ it("revalidates persisted sessions outside the cache and migrates existing histo
     ).count,
   ).toBe(5);
   db.close();
+});
+
+it("evicts the least recently used cached value while preserving its SQLite record", () => {
+  const storage = new SessionStorage(":memory:", { cachedSessions: 2 });
+  try {
+    for (const id of ["a", "b", "c"])
+      storage.save(reduceSession(undefined, event(id, id)));
+    const a = storage.get("codex:a"),
+      b = storage.get("codex:b");
+    expect(storage.get("codex:a")).toBe(a);
+    storage.get("codex:c");
+    expect(storage.get("codex:a")).toBe(a);
+    const reloaded = storage.get("codex:b");
+    expect(reloaded).not.toBe(b);
+    expect(reloaded?.task?.text).toBe("b");
+  } finally {
+    storage.close();
+  }
+});
+
+it("upgrades a version-one database without discarding its current session snapshot", () => {
+  const root = mkdtempSync(join(tmpdir(), "agentwatch-legacy-"));
+  roots.push(root);
+  const path = join(root, "state.sqlite");
+  const db = new Database(path);
+  db.exec(
+    "CREATE TABLE sessions (key TEXT PRIMARY KEY,lifecycle TEXT NOT NULL,last_activity INTEGER NOT NULL,data TEXT NOT NULL)",
+  );
+  const session = reduceSession(undefined, event("legacy", "kept task"));
+  db.prepare("INSERT INTO sessions VALUES (?,?,?,?)").run(
+    session.key,
+    session.lifecycle,
+    session.lastActivityAt,
+    JSON.stringify(session),
+  );
+  db.close();
+  const service = make(path);
+  expect(service.get("codex:legacy")).toMatchObject({
+    lifecycle: "unknown",
+    freshness: "stale",
+    task: { text: "kept task" },
+  });
+  expect(service.snapshot().sessions[0]?.key).toBe("codex:legacy");
 });

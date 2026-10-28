@@ -20,14 +20,14 @@
   },
   "devDependencies": {
     "@hono/node-server": "^2.1.5",
-    "@playwright/test": "latest",
-    "@types/better-sqlite3": "latest",
+    "@playwright/test": "1.64.1",
+    "@types/better-sqlite3": "9.6.0",
     "@types/node": "^24.0.0",
-    "esbuild": "latest",
+    "esbuild": "0.28.2",
     "hono": "^4.13.14",
-    "prettier": "latest",
-    "tsx": "latest",
+    "prettier": "3.9.10",
+    "tsx": "4.23.15",
     "typescript": "~5.9.3",
-    "vitest": "latest"
+    "vitest": "5.0.5"
   }
 }

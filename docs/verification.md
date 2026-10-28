@@ -1,5 +1,7 @@
 # AgentWatch delivery verification — 2026-10-27
 
+> Historical delivery report for the original MVP. Test counts, robot visibility and render measurements below describe that delivery, not the current implementation. See [maintenance verification — 2026-10-28](verification-2026-10-28.md) for the current checks and retention policy.
+
 Implemented on branch `codex/agentwatch-mvp` in the existing checkout, as requested. No remote push or merge was performed.
 
 ## Checks
