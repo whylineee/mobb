@@ -255,6 +255,9 @@ export class Analytics {
 
   private entities(): { rows: AgentRow[]; aliases: Map<string, string> } {
     const sessions = this.sessions();
+    const sessionByKey = new Map(
+      sessions.map((session) => [session.key, session]),
+    );
     const rows = new Map<string, AgentRow>();
     const aliases = new Map<string, string>();
     for (const session of sessions)
@@ -285,7 +288,7 @@ export class Analytics {
           linked.parentKey = parent.key;
           linked.kind = "subagent";
           linked.name = child.type ? `${child.type} · ${child.id}` : child.id;
-          const session = sessions.find((s) => s.key === linked.key)!;
+          const session = sessionByKey.get(linked.key)!;
           if (
             child.lifecycle === "ended" &&
             (child.updatedAt ?? 0) >= session.stateAt
@@ -365,7 +368,9 @@ export class Analytics {
     const amounts = new Map<string, TokenTotals[]>();
     for (const entry of this.ledger(from, to)) {
       const key = aliases.get(entry.entity) ?? entry.entity;
-      amounts.set(key, [...(amounts.get(key) ?? []), entry.tokens]);
+      const values = amounts.get(key);
+      if (values) values.push(entry.tokens);
+      else amounts.set(key, [entry.tokens]);
     }
     for (const row of rows)
       row.tokens = amounts.has(row.key) ? sum(amounts.get(row.key)!) : null;
@@ -444,7 +449,8 @@ export class Analytics {
     const step =
       range === "1h" ? MINUTE : range === "24h" ? 15 * MINUTE : 60 * MINUTE;
     const rows = this.entities().rows;
-    const ledger = this.ledger(from, to).filter((r) => matches(r, query));
+    const allLedger = this.ledger(from, to);
+    const ledger = allLedger.filter((r) => matches(r, query));
     const measured = sum(ledger.map((r) => r.tokens));
     const samples = this.db
       .prepare(
@@ -498,7 +504,9 @@ export class Analytics {
       const grouped = new Map<string, TokenTotals[]>();
       for (const entry of ledger) {
         const name = entry[dimension] ?? "Невідома модель";
-        grouped.set(name, [...(grouped.get(name) ?? []), entry.tokens]);
+        const values = grouped.get(name);
+        if (values) values.push(entry.tokens);
+        else grouped.set(name, [entry.tokens]);
       }
       breakdowns[dimension] = [...grouped]
         .map(([name, values]) => ({ name, tokens: sum(values) }))
@@ -537,7 +545,7 @@ export class Analytics {
       projects: [
         ...new Set([
           ...rows.map((r) => r.project),
-          ...this.ledger(from, to).map((r) => r.project),
+          ...allLedger.map((r) => r.project),
         ]),
       ].sort(),
       coverage: {

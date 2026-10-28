@@ -51,6 +51,26 @@ afterEach(() => {
 });
 
 describe("persistent analytics", () => {
+  it("preserves project filtering, per-agent totals, and all project choices", () => {
+    const s = make();
+    s.ingest(hook("a", "UserPromptSubmit", { cwd: "/work/alpha" }));
+    s.ingest(hook("b", "UserPromptSubmit", { cwd: "/work/beta" }));
+    s.ingest(usage(100, false, "a"));
+    s.ingest(usage(200, false, "b"));
+    clock += 1000;
+    s.ingest(usage(130, true, "a"));
+    s.ingest(usage(240, true, "b"));
+
+    const stats = s.statistics({ project: "alpha" });
+    expect(stats.tokens.total).toBe(30);
+    expect(stats.breakdowns.project).toMatchObject([
+      { name: "alpha", tokens: { total: 30 } },
+    ]);
+    expect(stats.projects).toEqual(["alpha", "beta"]);
+    expect(s.agents({ project: "alpha" }).agents).toMatchObject([
+      { key: "codex:a", tokens: { total: 30 } },
+    ]);
+  });
   it("replaces a corrected positive usage record with a measured zero", () => {
     const s = make();
     s.ingest(usage(100, false));
