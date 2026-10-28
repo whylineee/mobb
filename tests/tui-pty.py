@@ -29,7 +29,7 @@ def launch(columns, rows):
     original = termios.tcgetattr(slave)
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
     process = subprocess.Popen([node, cli, "tui", "--ascii", "--mono"], stdin=slave, stdout=slave, stderr=slave,
-                               start_new_session=True, env={**os.environ, "AGENTWATCH_HOME": home, "TERM": "xterm-256color"})
+                               start_new_session=True, env={**os.environ, "AGENTWATCH_HOME": home, "TERM": "xterm-256color", "CI": "true"})
     client = [process, master, slave, original, b""]
     clients.append(client)
     return client
@@ -66,8 +66,18 @@ def api(path, payload=None, hook=False):
 
 try:
     a, b = launch(120, 36), launch(80, 24)
-    wait_text(a, "LIVE")
-    wait_text(b, "LIVE")
+    try:
+        wait_text(a, "LIVE", timeout=30)
+        wait_text(b, "LIVE", timeout=30)
+    except AssertionError as error:
+        log_path = os.path.join(home, "daemon.log")
+        if os.path.exists(log_path):
+            with open(log_path, encoding="utf-8", errors="replace") as file:
+                log = file.read()[-2000:]
+            log = log.replace(config["uiToken"], "[REDACTED]").replace(config["hookToken"], "[REDACTED]")
+        else:
+            log = "<no daemon.log>"
+        raise AssertionError(f"{error}\ndaemon.log:\n{log}") from error
     for event, extra in [("UserPromptSubmit", {"prompt": "Synthetic PTY task"}),
                          ("SubagentStart", {"agent_id": "designer", "agent_type": "Designer"})]:
         api("/api/hooks/codex", {"eventId": event, "occurredAt": int(time.time()*1000),

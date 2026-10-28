@@ -169,6 +169,8 @@ export async function startTui(options: Options): Promise<void> {
   if (!process.stdin.isTTY || !process.stdout.isTTY)
     throw new Error("TUI requires an interactive terminal");
   const app = render(<Dashboard options={options} />, {
+    // stdin/stdout were checked above, so CI environment variables must not disable the TUI.
+    interactive: true,
     alternateScreen: true,
     exitOnCtrlC: false,
     patchConsole: false,

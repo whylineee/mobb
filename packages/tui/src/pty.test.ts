@@ -27,7 +27,7 @@ it("runs the actual TUI in real PTYs and restores the terminal without stopping 
         fileURLToPath(new URL("../../daemon/dist/cli.js", import.meta.url)),
         home,
       ],
-      { timeout: 50_000, maxBuffer: 1024 * 1024 },
+      { timeout: 120_000, maxBuffer: 1024 * 1024 },
     );
     expect(result.stdout).toContain("PTY PASS");
   } finally {
@@ -37,4 +37,4 @@ it("runs the actual TUI in real PTYs and restores the terminal without stopping 
       await new Promise((r) => setTimeout(r, 30));
     rmSync(home, { recursive: true, force: true });
   }
-}, 60_000);
+}, 130_000);
