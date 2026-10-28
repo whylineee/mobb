@@ -1,5 +1,6 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { createServer } from "node:http";
+import { setTimeout as realDelay } from "node:timers/promises";
 import { TuiClient } from "./client.js";
 it("loads paginated agents and coalesces ancestor context", async () => {
   const requests: string[] = [];
@@ -41,5 +42,53 @@ it("loads paginated agents and coalesces ancestor context", async () => {
   } finally {
     server.closeAllConnections();
     await new Promise<void>((r) => server.close(() => r()));
+  }
+});
+it("keeps a stream alive with heartbeats and reconnects only after inactivity", async () => {
+  vi.useFakeTimers();
+  let stream: ReadableStreamDefaultController<Uint8Array> | undefined;
+  let disconnected = 0;
+  const fetchMock = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async (_url, init) => {
+      const signal = init?.signal as AbortSignal;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          stream = controller;
+          signal.addEventListener(
+            "abort",
+            () => {
+              disconnected++;
+              controller.error(new Error("aborted"));
+            },
+            { once: true },
+          );
+        },
+      });
+      return new Response(body, { status: 200 });
+    });
+  const abort = new AbortController();
+  try {
+    const client = new TuiClient({
+      baseUrl: "http://127.0.0.1:1234",
+      token: "test",
+    });
+    const watch = client.watch(abort.signal, () => {});
+    await vi.advanceTimersByTimeAsync(20_000);
+    stream!.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(disconnected).toBe(0);
+    stream!.enqueue(new TextEncoder().encode(": heartbeat\n\n"));
+    await vi.advanceTimersByTimeAsync(35_301);
+    expect(disconnected).toBe(1);
+    await realDelay(400);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    abort.abort();
+    await watch;
+  } finally {
+    abort.abort();
+    fetchMock.mockRestore();
+    vi.useRealTimers();
   }
 });

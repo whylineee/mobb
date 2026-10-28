@@ -78,10 +78,17 @@ export class TuiClient {
     let backoff = 300;
     while (!signal.aborted) {
       let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+      const idle = new AbortController();
+      let timer: ReturnType<typeof setTimeout>;
+      const touch = () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => idle.abort(), 35_000);
+      };
+      touch();
       try {
         const response = await fetch(`${this.options.baseUrl}/api/stream`, {
           headers: { Authorization: `Bearer ${this.options.token}` },
-          signal: AbortSignal.any([signal, AbortSignal.timeout(35_000)]),
+          signal: AbortSignal.any([signal, idle.signal]),
         });
         if (response.status === 401) return;
         if (!response.ok || !response.body) throw new Error("SSE unavailable");
@@ -99,11 +106,13 @@ export class TuiClient {
         while (!signal.aborted) {
           const { value, done } = await reader.read();
           if (done) break;
+          touch();
           parser.feed(decoder.decode(value, { stream: true }));
         }
       } catch {
         /* HTTP polling preserves state while SSE reconnects. */
       } finally {
+        clearTimeout(timer!);
         await reader?.cancel().catch(() => {});
       }
       if (!signal.aborted)
