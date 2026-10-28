@@ -9,11 +9,18 @@ import { createApp } from "./server.js";
 import { installHooks, uninstallHooks } from "./hooks.js";
 import { FileCollectors } from "./collectors/files.js";
 import { ProcessCollector } from "./collectors/processes.js";
+import { ensureDaemon, stopDaemon } from "./lifecycle.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
+const command = process.argv[2] ?? "help";
+if (command === "tui" && (!process.stdin.isTTY || !process.stdout.isTTY)) {
+  console.error(
+    "AgentWatch TUI requires an interactive terminal (stdin and stdout TTY).",
+  );
+  process.exit(1);
+}
 const home = agentwatchHome(),
   config = loadConfig(home);
-const command = process.argv[2] ?? "help";
 const hookCliPath = resolve(root, "hook-cli/dist/cli.js");
 const hookOptions = (provider: "codex" | "claude") => ({
   provider,
@@ -28,7 +35,20 @@ const hookOptions = (provider: "codex" | "claude") => ({
 });
 
 try {
-  if (command === "setup") {
+  if (command === "tui") {
+    await ensureDaemon(config, home, fileURLToPath(import.meta.url));
+    const { startTui } = await import("@agentwatch/tui");
+    await startTui({
+      baseUrl: `http://127.0.0.1:${config.port}`,
+      token: config.uiToken,
+      ascii: process.argv.includes("--ascii"),
+      monochrome:
+        process.argv.includes("--mono") || process.env.NO_COLOR !== undefined,
+    });
+  } else if (command === "stop") {
+    await stopDaemon(config);
+    console.log("AgentWatch daemon stopped; agents remain running.");
+  } else if (command === "setup") {
     if (!existsSync(hookCliPath))
       throw new Error("Build the project first: pnpm build");
     for (const provider of ["codex", "claude"] as const) {
@@ -93,6 +113,9 @@ try {
       config,
       service,
       webRoot: resolve(root, "web/out"),
+      onShutdown: () => {
+        void shutdown();
+      },
       onHook(provider, raw, ancestors) {
         const p = raw as Record<string, unknown>;
         if (
@@ -109,9 +132,10 @@ try {
     const server = serve(
       { fetch: app.fetch, hostname: "127.0.0.1", port: config.port },
       () => {
-        console.log(
-          `AgentWatch → http://127.0.0.1:${config.port}/#token=${config.uiToken}`,
-        );
+        if (!process.argv.includes("--background"))
+          console.log(
+            `AgentWatch → http://127.0.0.1:${config.port}/#token=${config.uiToken}`,
+          );
         console.log(
           "Local, read-only monitoring. Ctrl+C stops AgentWatch, never your agents.",
         );
@@ -122,11 +146,15 @@ try {
     service.cleanup();
     const cleanup = setInterval(() => service.cleanup(), 3_600_000);
     cleanup.unref();
+    service.sampleActivity();
+    const samples = setInterval(() => service.sampleActivity(), 60_000);
+    samples.unref();
     let shuttingDown = false;
     const shutdown = async () => {
       if (shuttingDown) return;
       shuttingDown = true;
       clearInterval(cleanup);
+      clearInterval(samples);
       processes.close();
       await files.close();
       if ("closeAllConnections" in server) server.closeAllConnections();
@@ -148,7 +176,7 @@ try {
     });
   } else
     console.log(
-      "AgentWatch\n  pnpm agentwatch setup\n  pnpm agentwatch start\n  pnpm agentwatch doctor\n  pnpm agentwatch hooks uninstall",
+      "AgentWatch\n  pnpm agentwatch setup\n  pnpm agentwatch start\n  pnpm agentwatch tui [--ascii] [--mono]\n  pnpm agentwatch stop\n  pnpm agentwatch doctor\n  pnpm agentwatch hooks uninstall",
     );
 } catch (error) {
   console.error(error instanceof Error ? error.message : "AgentWatch failed");

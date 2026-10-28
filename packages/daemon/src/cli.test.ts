@@ -38,3 +38,14 @@ it("runs setup and scoped uninstall through the built CLI in an isolated home", 
     JSON.parse(readFileSync(join(root, "claude/settings.json"), "utf8")).hooks,
   ).toEqual({});
 });
+it("rejects a non-interactive TUI before creating config or starting a daemon", () => {
+  root = mkdtempSync(join(tmpdir(), "agentwatch-nontty-"));
+  const watchHome = join(root, "watch");
+  const result = spawnSync(process.execPath, [cli, "tui"], {
+    encoding: "utf8",
+    env: { ...process.env, AGENTWATCH_HOME: watchHome },
+  });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("interactive terminal");
+  expect(existsSync(watchHome)).toBe(false);
+});
