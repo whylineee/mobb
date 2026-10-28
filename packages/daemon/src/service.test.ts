@@ -89,7 +89,7 @@ describe("persistent service", () => {
     expect(restored.events("codex:s1").events).toHaveLength(1);
     expect(statSync(db).mode & 0o777).toBe(0o600);
   });
-  it("purges old finished sessions but protects open sessions and their events", () => {
+  it("purges old history and finished sessions but preserves current open state", () => {
     const day = 86_400_000,
       now = 20 * day;
     const s = make(":memory:", () => now);
@@ -101,7 +101,7 @@ describe("persistent service", () => {
     });
     s.cleanup();
     expect(s.get("codex:s1")?.lifecycle).toBe("open");
-    expect(s.events("codex:s1").events).toHaveLength(1);
+    expect(s.events("codex:s1").events).toHaveLength(0);
     expect(s.get("codex:old")).toBeUndefined();
   });
   it("subscribes atomically before sending the snapshot and unregisters on close", () => {

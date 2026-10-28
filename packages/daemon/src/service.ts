@@ -1,8 +1,5 @@
 import Database from "better-sqlite3";
-import { chmodSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
 import {
-  RETENTION_MS,
   type AgentEvent,
   type CollectorHealth,
   type EventPage,
@@ -14,67 +11,42 @@ import {
 import { reduceSession } from "./telemetry/reducer.js";
 import { MAX_OVERVIEW_SESSIONS, summarizeSession } from "./summary.js";
 
+import { SessionStorage, type StorageLimits } from "./storage.js";
+
 type Listener = (message: StreamMessage) => void;
 type Row = { data: string };
 
 export class AgentService {
   private db: Database.Database;
-  private sessions = new Map<string, Session>();
+  private storage: SessionStorage;
   private listeners = new Set<Listener>();
   private collectors = new Map<string, CollectorHealth>();
   private revision = 0;
   private closed = false;
   private now: () => number;
 
-  constructor(options: { dbPath: string; now?: () => number }) {
+  constructor(options: {
+    dbPath: string;
+    now?: () => number;
+    limits?: Partial<StorageLimits>;
+  }) {
     this.now = options.now ?? Date.now;
-    if (options.dbPath !== ":memory:")
-      mkdirSync(dirname(options.dbPath), { recursive: true, mode: 0o700 });
-    this.db = new Database(options.dbPath);
-    if (options.dbPath !== ":memory:") chmodSync(options.dbPath, 0o600);
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("busy_timeout = 3000");
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS migrations (version INTEGER PRIMARY KEY);
-      CREATE TABLE IF NOT EXISTS sessions (key TEXT PRIMARY KEY, lifecycle TEXT NOT NULL, last_activity INTEGER NOT NULL, data TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS events (seq INTEGER PRIMARY KEY AUTOINCREMENT, event_id TEXT NOT NULL UNIQUE, session_key TEXT NOT NULL, occurred_at INTEGER NOT NULL, data TEXT NOT NULL);
-      CREATE INDEX IF NOT EXISTS events_session_seq ON events(session_key, seq DESC);
-      CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
-      INSERT OR IGNORE INTO meta VALUES ('revision', 0);
-      INSERT OR IGNORE INTO migrations VALUES (1);
-    `);
+    this.storage = new SessionStorage(options.dbPath, options.limits);
+    this.db = this.storage.db;
     this.revision = (
       this.db.prepare("SELECT value FROM meta WHERE key='revision'").get() as {
         value: number;
       }
     ).value;
-    for (const row of this.db
-      .prepare("SELECT data FROM sessions")
-      .all() as Row[]) {
-      const s = JSON.parse(row.data) as Session;
-      if (s.lifecycle !== "ended") {
-        s.lifecycle = "unknown";
-        s.activity = "unknown";
-        s.freshness = "stale";
-        s.activeTools = [];
-        s.requiresAttention = false;
-        delete s.process;
-      }
-      this.sessions.set(s.key, s);
-      this.saveSession(s);
-    }
+    this.storage.cleanup(this.now());
   }
 
   private saveSession(s: Session): void {
-    this.db
-      .prepare(
-        "INSERT INTO sessions(key,lifecycle,last_activity,data) VALUES (?,?,?,?) ON CONFLICT(key) DO UPDATE SET lifecycle=excluded.lifecycle,last_activity=excluded.last_activity,data=excluded.data",
-      )
-      .run(s.key, s.lifecycle, s.lastActivityAt, JSON.stringify(s));
+    this.storage.save(s);
   }
 
   ingest(event: AgentEvent): boolean {
-    if (this.closed) return false;
+    if (this.closed || this.storage.isPrunedReplay(event)) return false;
     let next: Session | undefined;
     let published = event;
     const changed = this.db.transaction(() => {
@@ -125,15 +97,16 @@ export class AgentService {
           data: { ...merged.data, confirmed: event.data.confirmed },
         };
       }
-      next = reduceSession(this.sessions.get(event.sessionKey), applied);
+      next = reduceSession(this.storage.get(event.sessionKey), applied);
       this.saveSession(next);
+      this.storage.trimHistory(event.sessionKey);
       this.db
         .prepare("UPDATE meta SET value=value+1 WHERE key='revision'")
         .run();
       return true;
     })();
     if (!changed || !next) return false;
-    this.sessions.set(next.key, next);
+    this.storage.remember(next);
     this.revision++;
     this.publish({
       type: "delta",
@@ -143,15 +116,15 @@ export class AgentService {
   }
 
   get(key: string): Session | undefined {
-    const s = this.sessions.get(key);
+    const s = this.storage.get(key);
     return s ? { ...structuredClone(s), revision: this.revision } : undefined;
   }
   updateProcess(key: string, binding: ProcessBinding | undefined): void {
-    const previous = this.sessions.get(key);
+    const previous = this.storage.get(key);
     if (!previous || this.closed) return;
     if (JSON.stringify(previous.process) === JSON.stringify(binding)) return;
     const session = { ...previous, process: binding };
-    this.sessions.set(key, session);
+    this.storage.remember(session);
     this.saveSession(session);
     this.revision++;
     this.db
@@ -162,15 +135,13 @@ export class AgentService {
   snapshot(): StateSnapshot {
     return {
       revision: this.revision,
-      sessions: [...this.sessions.values()]
-        .sort(
-          (a, b) =>
-            Number(b.lifecycle === "open") - Number(a.lifecycle === "open") ||
-            b.lastObservedAt - a.lastObservedAt,
-        )
-        .slice(0, MAX_OVERVIEW_SESSIONS)
+      sessions: this.storage
+        .overview(MAX_OVERVIEW_SESSIONS)
         .map((s) => summarizeSession({ ...s, revision: this.revision })),
-      omittedSessions: Math.max(0, this.sessions.size - MAX_OVERVIEW_SESSIONS),
+      omittedSessions: Math.max(
+        0,
+        this.storage.count() - MAX_OVERVIEW_SESSIONS,
+      ),
       collectors: structuredClone([...this.collectors.values()]),
       serverTime: this.now(),
     };
@@ -218,7 +189,7 @@ export class AgentService {
             : undefined,
           omittedSessions: Math.max(
             0,
-            this.sessions.size - MAX_OVERVIEW_SESSIONS,
+            this.storage.count() - MAX_OVERVIEW_SESSIONS,
           ),
         },
       };
@@ -248,22 +219,7 @@ export class AgentService {
   }
 
   cleanup(): void {
-    const cutoff = this.now() - RETENTION_MS;
-    const removed = [...this.sessions.values()]
-      .filter((s) => s.lifecycle !== "open" && s.lastActivityAt < cutoff)
-      .map((s) => s.key);
-    this.db.transaction(() => {
-      this.db
-        .prepare(
-          "DELETE FROM events WHERE occurred_at<? AND session_key NOT IN (SELECT key FROM sessions WHERE lifecycle='open')",
-        )
-        .run(cutoff);
-      for (const key of removed) {
-        this.db.prepare("DELETE FROM events WHERE session_key=?").run(key);
-        this.db.prepare("DELETE FROM sessions WHERE key=?").run(key);
-      }
-    })();
-    for (const key of removed) this.sessions.delete(key);
+    const removed = this.storage.cleanup(this.now());
     if (removed.length) {
       this.revision++;
       this.db
@@ -280,7 +236,7 @@ export class AgentService {
     if (!this.closed) {
       this.closed = true;
       this.listeners.clear();
-      this.db.close();
+      this.storage.close();
     }
   }
 }
