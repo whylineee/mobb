@@ -1,6 +1,6 @@
 # Fixed-angle office and live monitoring panels
 
-The existing furnished cutaway office, palette, robots, seat allocation and
+The existing furnished cutaway office, palette, seat allocation and
 room expansion remain the primary surface. Linear lights use visible wall
 cantilevers, crossbars and short hangers, with no ceiling covering the room.
 
@@ -46,3 +46,28 @@ Target viewports are 1440x1000 and 390x844. Validate camera fit and constraints,
 edge-agent focus between panels, keyboard focus restoration, task transitions,
 partial/missing telemetry, offline/reconnect, authentication and WebGL fallback.
 Capture rendered office, board and monitoring states after a production build.
+
+Agent avatars use a local procedural mascot based on the supplied reference:
+red fur, cream belly, floppy brown ears, large brown eyes, black glasses, swept
+blond hair and navy shorts. Provider accents and existing attention indicators
+remain. Static body, glasses and fur merge into one vertex-colored geometry,
+instanced separately from the four animated arm pieces. Working agents type; attention raises a hand; reduced
+motion holds a static pose. No remote model, texture or image request is needed.
+
+Workstation furniture rotates 180 degrees and the seated mascot moves to the
+matching chair. The mascot faces +Z and the monitor screen faces -Z; characters
+look at their screens while their faces remain visible to the fixed camera.
+
+Rendering is demand-driven. Only live working agents schedule typing frames,
+capped at 20 FPS. Camera input and telemetry invalidate immediately. Empty and
+attention-only rooms rest without a render loop; reduced motion and offline
+state stop timed animation. Hidden documents switch the Canvas to `never` and
+stop its animation timer, resuming on visibility. The memoized Office does not
+rerender for the dashboard's one-second relative-time clock. Pixel density stays
+at the existing native DPR limit; no blur or resolution reduction is introduced.
+Shadow maps refresh when scene state changes and are reused during tiny arm
+gestures. Camera movement reuses the same light-space shadow map. Scene metrics
+record shadow refreshes alongside frame count and draw calls for verification.
+Tool history, process samples and timestamp-only updates do not invalidate the
+3D scene. The memo comparison includes the fields consumed by workstations,
+mascots and their tooltips; DOM panels still receive all telemetry updates.

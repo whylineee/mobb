@@ -3,8 +3,6 @@ import {
   Component,
   Suspense,
   memo,
-  createContext,
-  useContext,
   useCallback,
   useEffect,
   useMemo,
@@ -20,11 +18,14 @@ import {
   OrbitControls,
   RoundedBox,
 } from "@react-three/drei";
-import { BoxGeometry, Group, Vector3, MOUSE, TOUCH } from "three";
+import { BoxGeometry, Vector3, MOUSE, TOUCH } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { Bot, Focus, Minus, Plus } from "lucide-react";
+import { PawPrint, Focus, Minus, Plus } from "lucide-react";
 import { sessionStatus, type Session } from "@agentwatch/shared";
 import { agentName, STATUS_LABELS } from "./Status";
+import { AgentMascot, MascotInstances } from "./AgentMascot";
+import { SceneFrames } from "./SceneFrames";
+import { sameSceneSessions } from "../lib/scene-sessions";
 import {
   HOME,
   CAMERA_OFFSET,
@@ -39,6 +40,7 @@ type Props = {
   selectedKey: string | null;
   labels: boolean;
   reducedMotion: boolean;
+  online: boolean;
   onSelect: (key: string | null) => void;
   onFallback: () => void;
   insets: SceneInsets;
@@ -51,13 +53,12 @@ const [GlowInstances, Glow] = createInstances();
 const [SoftInstances, Soft] = createInstances();
 const [FoliageInstances, Foliage] = createInstances();
 const [PotInstances, Pot] = createInstances();
-const [OrbInstances, Orb] = createInstances();
-const [HeadInstances, Head] = createInstances();
-const RobotParts = createContext(false);
 declare global {
   interface Window {
     __agentwatchPerformance?: {
       fps: number;
+      animationFps: number;
+      shadowUpdates: number;
       frames: number;
       calls: number;
       triangles: number;
@@ -104,10 +105,7 @@ function Box({
   emissive?: string;
   emissiveIntensity?: number;
 }) {
-  const animated = useContext(RobotParts);
-  return animated ? (
-    <Head position={position} scale={size} color={color} />
-  ) : props.emissive ? (
+  return props.emissive ? (
     <Glow position={position} scale={size} color={color} />
   ) : rounded ? (
     <Soft position={position} scale={size} color={color} />
@@ -658,130 +656,6 @@ function Room({ rows, shadows }: { rows: number; shadows: boolean }) {
   );
 }
 
-const Robot = memo(function Robot({
-  session,
-  reducedMotion,
-}: {
-  session: Session;
-  reducedMotion: boolean;
-}) {
-  const body = useRef<Group>(null),
-    left = useRef<Group>(null),
-    right = useRef<Group>(null);
-  const status = sessionStatus(session),
-    codex = session.provider === "codex";
-  const shell = codex ? "#c3d5c5" : "#d7b6a0",
-    accent = codex ? "#72c6ad" : "#dc9b77";
-  const light =
-    status === "working"
-      ? "#83ddad"
-      : status === "waiting"
-        ? "#efbd69"
-        : status === "ended"
-          ? "#66766d"
-          : "#b4c2b6";
-  useFrame(({ clock }) => {
-    if (!body.current || !left.current || !right.current) return;
-    const t = clock.elapsedTime;
-    body.current.position.y =
-      reducedMotion || status === "unknown"
-        ? 0
-        : Math.sin(t * (status === "working" ? 5 : 1.4)) * 0.012;
-    left.current.rotation.x =
-      status === "working" && !reducedMotion
-        ? -0.6 + Math.sin(t * 12) * 0.12
-        : -0.25;
-    right.current.rotation.z = status === "waiting" ? -2.6 : 0;
-    right.current.rotation.x =
-      status === "working" && !reducedMotion
-        ? -0.6 + Math.sin(t * 12 + 2) * 0.12
-        : -0.25;
-    if (status === "ended" && session.endedAt) {
-      const elapsed = Date.now() - session.endedAt;
-      body.current.position.y = 0.12;
-      body.current.scale.setScalar(
-        elapsed > 55000 ? Math.max(0.03, 1 - (elapsed - 55000) / 5000) : 1,
-      );
-    } else body.current.scale.setScalar(1);
-  });
-  return (
-    <RobotParts.Provider value={true}>
-      <group ref={body} position={[0, 0, 0]}>
-        <Box
-          position={[-0.19, 0.32, 0.11]}
-          size={[0.23, 0.43, 0.3]}
-          color="#4b6059"
-          rounded
-        />
-        <Box
-          position={[0.19, 0.32, 0.11]}
-          size={[0.23, 0.43, 0.3]}
-          color="#4b6059"
-          rounded
-        />
-        <Box
-          position={[0, 0.7, 0]}
-          size={[0.67, 0.65, 0.45]}
-          color={shell}
-          rounded
-        />
-        <Box
-          position={[0, 0.78, 0.24]}
-          size={[0.32, 0.25, 0.04]}
-          color={accent}
-          rounded
-        />
-        <Head position={[0, 1.34, 0]} scale={[0.88, 0.7, 0.62]} color={shell} />
-        <Box
-          position={[0, 1.34, 0.325]}
-          size={[0.66, 0.31, 0.03]}
-          color="#263d37"
-          rounded
-        />
-        {[-0.17, 0.17].map((x) => (
-          <Orb key={x} position={[x, 1.36, 0.35]} scale={0.058} color={light} />
-        ))}
-        <Box
-          position={[0, 1.65, 0]}
-          size={[0.045, 0.25, 0.045]}
-          color="#526b5e"
-        />
-        <Orb position={[0, 1.82, 0]} scale={0.065} color={accent} />
-        <group ref={left} position={[-0.43, 0.88, 0]}>
-          <Box
-            position={[0, -0.22, 0.08]}
-            size={[0.2, 0.45, 0.22]}
-            color={shell}
-            rounded
-          />
-        </group>
-        <group ref={right} position={[0.43, 0.88, 0]}>
-          <Box
-            position={[0, -0.22, 0.08]}
-            size={[0.2, 0.45, 0.22]}
-            color={shell}
-            rounded
-          />
-        </group>
-        {!codex && (
-          <>
-            <Box
-              position={[-0.45, 1.35, 0]}
-              size={[0.12, 0.25, 0.2]}
-              color={accent}
-            />
-            <Box
-              position={[0.45, 1.35, 0]}
-              size={[0.12, 0.25, 0.2]}
-              color={accent}
-            />
-          </>
-        )}
-      </group>
-    </RobotParts.Provider>
-  );
-});
-
 const Desk = memo(function Desk({
   session,
   seat,
@@ -836,96 +710,102 @@ const Desk = memo(function Desk({
           />
         </mesh>
       )}
-      <Box
-        position={[0, 1.17, -0.22]}
-        size={[2.55, 0.16, 1.65]}
-        color="#d7c3a1"
-        rounded
-      />
-      {[-1.02, 1.02].flatMap((x) =>
-        [-0.8, 0.4].map((z) => (
-          <Box
-            key={`${x}:${z}`}
-            position={[x, 0.57, z]}
-            size={[0.09, 1.12, 0.09]}
-            color="#52665b"
-          />
-        )),
-      )}
-      <Box
-        position={[0, 1.39, -0.65]}
-        size={[0.1, 0.35, 0.1]}
-        color="#3b4f45"
-      />
-      <Box
-        position={[0, 1.27, -0.65]}
-        size={[0.55, 0.05, 0.3]}
-        color="#3b4f45"
-        rounded
-      />
-      <Box
-        position={[0, 1.77, -0.65]}
-        size={[1.17, 0.74, 0.09]}
-        color="#34463e"
-        rounded
-      />
-      <Box
-        position={[0, 1.78, -0.592]}
-        size={[1.04, 0.61, 0.02]}
-        color="#2b4940"
-        emissive={screen}
-        emissiveIntensity={status === "ended" ? 0.02 : 0.23}
-      />
-      {[0, 1, 2].map((i) => (
+      <group rotation={[0, Math.PI, 0]}>
         <Box
-          key={i}
-          position={[-0.16 + i * 0.07, 1.96 - i * 0.14, -0.576]}
-          size={[0.55 - i * 0.12, 0.027, 0.012]}
-          color={screen}
-          emissive={screen}
-          emissiveIntensity={0.3}
+          position={[0, 1.17, -0.22]}
+          size={[2.55, 0.16, 1.65]}
+          color="#d7c3a1"
+          rounded
         />
-      ))}
-      <Box
-        position={[0, 1.28, 0.14]}
-        size={[0.8, 0.035, 0.32]}
-        color="#8f9c85"
-        rounded
-      />
-      <Box
-        position={[0.92, 1.36, -0.3]}
-        size={[0.16, 0.22, 0.16]}
-        color={session?.provider === "codex" ? "#a6c1a6" : "#c59b74"}
-        rounded
-      />
-      <Box
-        position={[0, 0.55, 0.95]}
-        size={[0.85, 0.15, 0.8]}
-        color="#526b5d"
-        rounded
-      />
-      <Box position={[0, 0.22, 0.95]} size={[0.1, 0.5, 0.1]} color="#3e5348" />
-      <Box
-        position={[0, 1.03, 1.32]}
-        size={[0.8, 0.8, 0.12]}
-        color="#526b5d"
-        rounded
-      />
-      <Box
-        position={[0, 0.17, 0.95]}
-        size={[0.8, 0.07, 0.12]}
-        color="#3e5348"
-      />
+        {[-1.02, 1.02].flatMap((x) =>
+          [-0.8, 0.4].map((z) => (
+            <Box
+              key={`${x}:${z}`}
+              position={[x, 0.57, z]}
+              size={[0.09, 1.12, 0.09]}
+              color="#52665b"
+            />
+          )),
+        )}
+        <Box
+          position={[0, 1.39, -0.65]}
+          size={[0.1, 0.35, 0.1]}
+          color="#3b4f45"
+        />
+        <Box
+          position={[0, 1.27, -0.65]}
+          size={[0.55, 0.05, 0.3]}
+          color="#3b4f45"
+          rounded
+        />
+        <Box
+          position={[0, 1.77, -0.65]}
+          size={[1.17, 0.74, 0.09]}
+          color="#34463e"
+          rounded
+        />
+        <Box
+          position={[0, 1.78, -0.592]}
+          size={[1.04, 0.61, 0.02]}
+          color="#2b4940"
+          emissive={screen}
+          emissiveIntensity={status === "ended" ? 0.02 : 0.23}
+        />
+        {[0, 1, 2].map((i) => (
+          <Box
+            key={i}
+            position={[-0.16 + i * 0.07, 1.96 - i * 0.14, -0.576]}
+            size={[0.55 - i * 0.12, 0.027, 0.012]}
+            color={screen}
+            emissive={screen}
+            emissiveIntensity={0.3}
+          />
+        ))}
+        <Box
+          position={[0, 1.28, 0.14]}
+          size={[0.8, 0.035, 0.32]}
+          color="#8f9c85"
+          rounded
+        />
+        <Box
+          position={[0.92, 1.36, -0.3]}
+          size={[0.16, 0.22, 0.16]}
+          color={session?.provider === "codex" ? "#a6c1a6" : "#c59b74"}
+          rounded
+        />
+        <Box
+          position={[0, 0.55, 0.95]}
+          size={[0.85, 0.15, 0.8]}
+          color="#526b5d"
+          rounded
+        />
+        <Box
+          position={[0, 0.22, 0.95]}
+          size={[0.1, 0.5, 0.1]}
+          color="#3e5348"
+        />
+        <Box
+          position={[0, 1.03, 1.32]}
+          size={[0.8, 0.8, 0.12]}
+          color="#526b5d"
+          rounded
+        />
+        <Box
+          position={[0, 0.17, 0.95]}
+          size={[0.8, 0.07, 0.12]}
+          color="#3e5348"
+        />
+      </group>
       {session && (
-        <group position={[0, 0.6, 0.7]} scale={0.8}>
-          <Robot session={session} reducedMotion={reducedMotion} />
+        <group position={[0, 0.23, -0.7]} scale={0.85}>
+          <AgentMascot session={session} reducedMotion={reducedMotion} />
         </group>
       )}
       {session && (labels || selected || hovered) && (
         <Html
           portal={portal as RefObject<HTMLElement>}
           center
-          position={[0, 2.65, 0]}
+          position={[0, 2.85, -0.7]}
           zIndexRange={[20, 0]}
         >
           <button
@@ -937,7 +817,7 @@ const Desk = memo(function Desk({
             }}
             aria-label={`Вибрати ${agentName(session.provider)} ${session.sessionId}`}
           >
-            <Bot size={12} aria-hidden="true" />
+            <PawPrint size={12} aria-hidden="true" />
             <span className={`robot-dot dot-${status}`} aria-hidden="true" />
             <span className="robot-tooltip">
               <strong>{agentName(session.provider)}</strong>
@@ -1093,211 +973,171 @@ function CameraRig({
   );
 }
 
-function PerformanceMeter({
-  onLowFps,
-  continuous,
-}: {
-  onLowFps: () => void;
-  continuous: boolean;
-}) {
-  const stats = useRef({ start: 0, count: 0, frames: 0, slowSamples: 0 });
-  useFrame(({ gl }) => {
-    const now = performance.now(),
-      s = stats.current;
-    s.frames++;
-    s.count++;
-    window.__agentwatchPerformance = {
-      fps: window.__agentwatchPerformance?.fps ?? 0,
-      frames: s.frames,
-      calls: gl.info.render.calls,
-      triangles: gl.info.render.triangles,
-      dpr: gl.getPixelRatio(),
-    };
-    // Demand rendering intentionally pauses. Idle time is not a slow frame.
-    if (!continuous) return;
-    if (!s.start) s.start = now;
-    if (now - s.start > 1000) {
-      const fps = Math.round((s.count * 1000) / (now - s.start));
-      window.__agentwatchPerformance = {
-        fps,
-        frames: s.frames,
-        calls: gl.info.render.calls,
-        triangles: gl.info.render.triangles,
-        dpr: gl.getPixelRatio(),
-      };
-      s.slowSamples = fps < 32 ? s.slowSamples + 1 : 0;
-      if (s.slowSamples >= 2) {
-        onLowFps();
-        s.slowSamples = 0;
-      }
-      s.count = 0;
-      s.start = now;
-    }
-  });
-  return null;
-}
-
-export default function Office(props: Props) {
-  const [action, setAction] = useState({ type: "reset", id: 0 });
-  const portal = useRef<HTMLDivElement>(null);
-  const [detailed, setDetailed] = useState(true);
-  // Preserve native pixel density. Reduce mesh detail and shadows under load.
-  const lowerQuality = useCallback(() => setDetailed(false), []);
-  const shadows = props.sessions.length <= 8 && detailed;
-  const geometry = useMemo(() => new BoxGeometry(1, 1, 1), []);
-  const softGeometry = useMemo(
-    () => new RoundedBoxGeometry(1, 1, 1, 1, 0.06),
-    [],
-  );
-  useEffect(
-    () => () => {
-      geometry.dispose();
-      softGeometry.dispose();
-    },
-    [geometry, softGeometry],
-  );
-  const seats = useRef(new Map<string, Seat>()),
-    pointer = useRef({ x: 0, y: 0, dragged: false });
-  const allKeys = props.allSessions.map((s) => s.key).join("|");
-  useMemo(() => {
-    const keys = new Set(props.allSessions.map((s) => s.key));
-    for (const key of seats.current.keys())
-      if (!keys.has(key)) seats.current.delete(key);
-    const taken = new Set(
-      [...seats.current.values()].map((p) => `${p[0]}:${p[2]}`),
+const Office = memo(
+  function Office(props: Props) {
+    const [action, setAction] = useState({ type: "reset", id: 0 });
+    const portal = useRef<HTMLDivElement>(null);
+    const [detailed, setDetailed] = useState(true);
+    const [pageVisible, setPageVisible] = useState(() => !document.hidden);
+    useEffect(() => {
+      const update = () => setPageVisible(!document.hidden);
+      document.addEventListener("visibilitychange", update);
+      return () => document.removeEventListener("visibilitychange", update);
+    }, []);
+    const animated =
+      pageVisible &&
+      props.online &&
+      !props.reducedMotion &&
+      props.sessions.some((session) => session.activity === "working");
+    // Preserve native pixel density. Reduce mesh detail and shadows under load.
+    const lowerQuality = useCallback(() => setDetailed(false), []);
+    const shadows = props.sessions.length <= 8 && detailed;
+    const geometry = useMemo(() => new BoxGeometry(1, 1, 1), []);
+    const softGeometry = useMemo(
+      () => new RoundedBoxGeometry(1, 1, 1, 1, 0.06),
+      [],
     );
-    for (const session of props.allSessions) {
-      if (seats.current.has(session.key)) continue;
-      for (let i = 0; ; i++) {
-        const seat: Seat = [
-          -5.2 + (i % 4) * 3.4,
-          0,
-          -5.9 + Math.floor(i / 4) * 3.25,
-        ];
-        const key = `${seat[0]}:${seat[2]}`;
-        if (!taken.has(key)) {
-          seats.current.set(session.key, seat);
-          taken.add(key);
-          break;
+    useEffect(
+      () => () => {
+        geometry.dispose();
+        softGeometry.dispose();
+      },
+      [geometry, softGeometry],
+    );
+    const seats = useRef(new Map<string, Seat>()),
+      pointer = useRef({ x: 0, y: 0, dragged: false });
+    const allKeys = props.allSessions.map((s) => s.key).join("|");
+    useMemo(() => {
+      const keys = new Set(props.allSessions.map((s) => s.key));
+      for (const key of seats.current.keys())
+        if (!keys.has(key)) seats.current.delete(key);
+      const taken = new Set(
+        [...seats.current.values()].map((p) => `${p[0]}:${p[2]}`),
+      );
+      for (const session of props.allSessions) {
+        if (seats.current.has(session.key)) continue;
+        for (let i = 0; ; i++) {
+          const seat: Seat = [
+            -5.2 + (i % 4) * 3.4,
+            0,
+            -5.9 + Math.floor(i / 4) * 3.25,
+          ];
+          const key = `${seat[0]}:${seat[2]}`;
+          if (!taken.has(key)) {
+            seats.current.set(session.key, seat);
+            taken.add(key);
+            break;
+          }
         }
       }
-    }
-  }, [allKeys]);
-  const occupied = new Map(
-    props.sessions.map((s) => {
-      const seat = seats.current.get(s.key) ?? [0, 0, 0];
-      return [`${seat[0]}:${seat[2]}`, s] as const;
-    }),
-  );
-  const maxRow = Math.max(
-    4,
-    ...[...seats.current.values()].map(
-      (seat) => Math.round((seat[2] + 5.9) / 3.25) + 1,
-    ),
-  );
-  const rows = Math.max(4, maxRow);
-  const furniture = Array.from({ length: rows * 4 }, (_, i) => {
-    const seat: Seat = [
-      -5.2 + (i % 4) * 3.4,
-      0,
-      -5.9 + Math.floor(i / 4) * 3.25,
-    ];
-    return { seat, session: occupied.get(`${seat[0]}:${seat[2]}`) };
-  });
-  const setCamera = (type: string) =>
-    setAction((a) => ({ type, id: a.id + 1 }));
-  return (
-    <SceneBoundary onFallback={props.onFallback}>
-      <div
-        className="office-canvas"
-        data-testid="office-canvas"
-        onPointerDown={(e) => {
-          pointer.current = { x: e.clientX, y: e.clientY, dragged: false };
-        }}
-        onPointerMove={(e) => {
-          if (
-            Math.hypot(
-              e.clientX - pointer.current.x,
-              e.clientY - pointer.current.y,
-            ) > 5
-          )
-            pointer.current.dragged = true;
-        }}
-      >
-        <div className="robot-overlays" ref={portal} />
-        <Canvas
-          orthographic
-          camera={{ position: HOME, zoom: 28, near: 0.1, far: 1000 }}
-          dpr={[1, 2]}
-          shadows={shadows}
-          frameloop={props.reducedMotion ? "demand" : "always"}
-          gl={{
-            antialias: true,
-            alpha: false,
-            powerPreference: "high-performance",
+    }, [allKeys]);
+    const occupied = new Map(
+      props.sessions.map((s) => {
+        const seat = seats.current.get(s.key) ?? [0, 0, 0];
+        return [`${seat[0]}:${seat[2]}`, s] as const;
+      }),
+    );
+    const maxRow = Math.max(
+      4,
+      ...[...seats.current.values()].map(
+        (seat) => Math.round((seat[2] + 5.9) / 3.25) + 1,
+      ),
+    );
+    const rows = Math.max(4, maxRow);
+    const furniture = Array.from({ length: rows * 4 }, (_, i) => {
+      const seat: Seat = [
+        -5.2 + (i % 4) * 3.4,
+        0,
+        -5.9 + Math.floor(i / 4) * 3.25,
+      ];
+      return { seat, session: occupied.get(`${seat[0]}:${seat[2]}`) };
+    });
+    const setCamera = (type: string) =>
+      setAction((a) => ({ type, id: a.id + 1 }));
+    return (
+      <SceneBoundary onFallback={props.onFallback}>
+        <div
+          className="office-canvas"
+          data-testid="office-canvas"
+          onPointerDown={(e) => {
+            pointer.current = { x: e.clientX, y: e.clientY, dragged: false };
           }}
-          onPointerMissed={() => {
-            if (!pointer.current.dragged) props.onSelect(null);
+          onPointerMove={(e) => {
+            if (
+              Math.hypot(
+                e.clientX - pointer.current.x,
+                e.clientY - pointer.current.y,
+              ) > 5
+            )
+              pointer.current.dragged = true;
           }}
         >
-          <color attach="background" args={["#8c9a7b"]} />
-          <hemisphereLight args={["#e4ecdf", "#8d826c", 2]} />
-          <ambientLight intensity={0.45} color="#e5e8d9" />
-          <directionalLight
-            position={[3, 18, -5]}
-            intensity={3.2}
-            color="#ffdfb2"
-            castShadow={shadows}
-            shadow-mapSize={[1024, 1024]}
-            shadow-camera-left={-15}
-            shadow-camera-right={15}
-            shadow-camera-top={15}
-            shadow-camera-bottom={-15}
-            shadow-bias={-0.001}
-          />
-          <directionalLight
-            position={[-8, 8, -6]}
-            intensity={0.6}
-            color="#a4d3c4"
-          />
-          <Suspense fallback={null}>
-            <SolidInstances
-              frames={1}
-              limit={Math.max(2200, furniture.length * 45 + 800)}
-              geometry={geometry}
-              castShadow
-              receiveShadow
-            >
-              <meshLambertMaterial color="white" />
-              <SoftInstances
+          <div className="robot-overlays" ref={portal} />
+          <Canvas
+            orthographic
+            camera={{ position: HOME, zoom: 28, near: 0.1, far: 1000 }}
+            dpr={[1, 2]}
+            shadows={shadows}
+            frameloop={pageVisible ? "demand" : "never"}
+            gl={{
+              antialias: true,
+              alpha: false,
+              powerPreference: "high-performance",
+            }}
+            onPointerMissed={() => {
+              if (!pointer.current.dragged) props.onSelect(null);
+            }}
+          >
+            <color attach="background" args={["#8c9a7b"]} />
+            <hemisphereLight args={["#e4ecdf", "#8d826c", 2]} />
+            <ambientLight intensity={0.45} color="#e5e8d9" />
+            <directionalLight
+              position={[3, 18, -5]}
+              intensity={3.2}
+              color="#ffdfb2"
+              castShadow={shadows}
+              shadow-mapSize={[1024, 1024]}
+              shadow-camera-left={-15}
+              shadow-camera-right={15}
+              shadow-camera-top={15}
+              shadow-camera-bottom={-15}
+              shadow-bias={-0.001}
+            />
+            <directionalLight
+              position={[-8, 8, -6]}
+              intensity={0.6}
+              color="#a4d3c4"
+            />
+            <Suspense fallback={null}>
+              <SolidInstances
                 frames={1}
-                limit={Math.max(500, furniture.length * 15)}
-                geometry={detailed ? softGeometry : geometry}
+                limit={Math.max(2200, furniture.length * 45 + 800)}
+                geometry={geometry}
                 castShadow
                 receiveShadow
               >
-                <meshLambertMaterial />
-                <GlowInstances
+                <meshLambertMaterial color="white" />
+                <SoftInstances
                   frames={1}
-                  limit={Math.max(200, furniture.length * 5)}
+                  limit={Math.max(500, furniture.length * 15)}
+                  geometry={detailed ? softGeometry : geometry}
+                  castShadow
+                  receiveShadow
                 >
-                  <boxGeometry args={[1, 1, 1]} />
-                  <meshBasicMaterial />
-                  <FoliageInstances frames={1} limit={100} castShadow>
-                    <sphereGeometry args={[0.24, 6, 5]} />
-                    <meshLambertMaterial />
-                    <PotInstances frames={1} limit={24} castShadow>
-                      <cylinderGeometry args={[0.29, 0.23, 0.5, 8]} />
+                  <meshLambertMaterial />
+                  <GlowInstances
+                    frames={1}
+                    limit={Math.max(200, furniture.length * 5)}
+                  >
+                    <boxGeometry args={[1, 1, 1]} />
+                    <meshBasicMaterial />
+                    <FoliageInstances frames={1} limit={100} castShadow>
+                      <sphereGeometry args={[0.24, 6, 5]} />
                       <meshLambertMaterial />
-                      <OrbInstances limit={Math.max(100, furniture.length * 3)}>
-                        <sphereGeometry args={[1, 8, 6]} />
-                        <meshBasicMaterial />
-                        <HeadInstances
-                          limit={Math.max(100, furniture.length * 15)}
-                          geometry={detailed ? softGeometry : geometry}
-                          castShadow
-                        >
-                          <meshLambertMaterial />
+                      <PotInstances frames={1} limit={24} castShadow>
+                        <cylinderGeometry args={[0.29, 0.23, 0.5, 8]} />
+                        <meshLambertMaterial />
+                        <MascotInstances shadows={shadows}>
                           <Room rows={rows} shadows={shadows} />
                           {furniture.map(({ seat, session }, i) => (
                             <Desk
@@ -1313,56 +1153,69 @@ export default function Office(props: Props) {
                               portal={portal}
                             />
                           ))}
-                        </HeadInstances>
-                      </OrbInstances>
-                    </PotInstances>
-                  </FoliageInstances>
-                </GlowInstances>
-              </SoftInstances>
-            </SolidInstances>
-          </Suspense>
-          <CameraRig
-            focus={
-              props.selectedKey
-                ? seats.current.get(props.selectedKey)
-                : undefined
-            }
-            action={action}
-            reduced={props.reducedMotion}
-            rows={rows}
-            insets={props.insets}
-            resetId={props.resetId}
-          />
-          <PerformanceMeter
-            onLowFps={lowerQuality}
-            continuous={!props.reducedMotion}
-          />
-        </Canvas>
-      </div>
-      <div className="camera-controls">
-        <button
-          aria-label="Наблизити"
-          title="Наблизити"
-          onClick={() => setCamera("in")}
-        >
-          <Plus size={16} />
-        </button>
-        <button
-          aria-label="Віддалити"
-          title="Віддалити"
-          onClick={() => setCamera("out")}
-        >
-          <Minus size={16} />
-        </button>
-        <span />
-        <button
-          aria-label="Показати весь офіс"
-          title="Показати весь офіс"
-          onClick={() => setCamera("reset")}
-        >
-          <Focus size={16} />
-        </button>
-      </div>
-    </SceneBoundary>
-  );
-}
+                        </MascotInstances>
+                      </PotInstances>
+                    </FoliageInstances>
+                  </GlowInstances>
+                </SoftInstances>
+              </SolidInstances>
+            </Suspense>
+            <CameraRig
+              focus={
+                props.selectedKey
+                  ? seats.current.get(props.selectedKey)
+                  : undefined
+              }
+              action={action}
+              reduced={props.reducedMotion}
+              rows={rows}
+              insets={props.insets}
+              resetId={props.resetId}
+            />
+            <SceneFrames onLowFps={lowerQuality} animated={animated} />
+          </Canvas>
+        </div>
+        <div className="camera-controls">
+          <button
+            aria-label="Наблизити"
+            title="Наблизити"
+            onClick={() => setCamera("in")}
+          >
+            <Plus size={16} />
+          </button>
+          <button
+            aria-label="Віддалити"
+            title="Віддалити"
+            onClick={() => setCamera("out")}
+          >
+            <Minus size={16} />
+          </button>
+          <span />
+          <button
+            aria-label="Показати весь офіс"
+            title="Показати весь офіс"
+            onClick={() => setCamera("reset")}
+          >
+            <Focus size={16} />
+          </button>
+        </div>
+      </SceneBoundary>
+    );
+  },
+  (previous, next) =>
+    previous.selectedKey === next.selectedKey &&
+    previous.labels === next.labels &&
+    previous.reducedMotion === next.reducedMotion &&
+    previous.online === next.online &&
+    previous.insets === next.insets &&
+    previous.resetId === next.resetId &&
+    previous.onSelect === next.onSelect &&
+    previous.onFallback === next.onFallback &&
+    sameSceneSessions(previous.sessions, next.sessions) &&
+    previous.allSessions.length === next.allSessions.length &&
+    previous.allSessions.every(
+      (session, index) => session.key === next.allSessions[index]!.key,
+    ),
+);
+
+export default Office;
