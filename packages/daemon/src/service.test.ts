@@ -37,6 +37,38 @@ afterEach(() => {
 });
 
 describe("persistent service", () => {
+  it("changes the details version for semantic events, but not process samples or collector health", () => {
+    const s = make();
+    s.ingest(
+      event("UserPromptSubmit", "start", 1000, {
+        prompt: "Full task",
+        turn_id: "t1",
+      }),
+    );
+    const before = s.get("codex:s1")!;
+    expect(before.detailsRevision).toBeTypeOf("number");
+    s.updateProcess("codex:s1", { pid: 7, startedAt: 1, cpuPercent: 5 });
+    s.health({
+      id: "processes",
+      state: "ready",
+      message: "ready",
+      lastCheckedAt: 1000,
+      droppedEvents: 0,
+    });
+    expect(s.get("codex:s1")?.detailsRevision).toBe(before.detailsRevision);
+    expect(s.snapshot().sessions[0]?.detailsRevision).toBe(
+      before.detailsRevision,
+    );
+    s.ingest(
+      event("PreToolUse", "tool", 1000, {
+        tool_use_id: "c1",
+        tool_name: "Read",
+      }),
+    );
+    expect(s.get("codex:s1")!.detailsRevision).toBeGreaterThan(
+      before.detailsRevision!,
+    );
+  });
   it("deduplicates calls from multiple sources and pages history without duplicates", () => {
     const s = make();
     s.ingest(event("SessionStart", "start", 1000));
@@ -82,14 +114,16 @@ describe("persistent service", () => {
     const db = join(home(), "state.sqlite");
     const s = make(db);
     s.ingest(event("SessionStart", "start", Date.now()));
+    const version = s.get("codex:s1")!.detailsRevision;
     s.close();
     const restored = make(db);
     expect(restored.get("codex:s1")?.lifecycle).toBe("unknown");
     expect(restored.get("codex:s1")?.freshness).toBe("stale");
+    expect(restored.get("codex:s1")!.detailsRevision).toBeGreaterThan(version!);
     expect(restored.events("codex:s1").events).toHaveLength(1);
     expect(statSync(db).mode & 0o777).toBe(0o600);
   });
-  it("purges old finished sessions but protects open sessions and their events", () => {
+  it("purges old history and finished sessions but preserves current open state", () => {
     const day = 86_400_000,
       now = 20 * day;
     const s = make(":memory:", () => now);
@@ -101,7 +135,7 @@ describe("persistent service", () => {
     });
     s.cleanup();
     expect(s.get("codex:s1")?.lifecycle).toBe("open");
-    expect(s.events("codex:s1").events).toHaveLength(1);
+    expect(s.events("codex:s1").events).toHaveLength(0);
     expect(s.get("codex:old")).toBeUndefined();
   });
   it("subscribes atomically before sending the snapshot and unregisters on close", () => {

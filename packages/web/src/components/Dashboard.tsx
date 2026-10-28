@@ -1,21 +1,12 @@
 "use client";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ArrowUpRight,
-  Bot,
-  Code2,
-  List,
-  LockKeyhole,
-  Home,
-  Columns3,
-  ChartNoAxesCombined,
-  Radio,
-} from "lucide-react";
-import { officeVisible, type Session } from "@agentwatch/shared";
-import { bootstrapToken, connect, TOKEN_KEY } from "../lib/client";
+import { List, Home, Columns3, ChartNoAxesCombined, Radio } from "lucide-react";
+import { officeVisible } from "@agentwatch/shared";
+import { bootstrapToken, connect } from "../lib/client";
 import { telemetryStore, useTelemetry } from "../lib/store";
-import { agentName, relativeTime, Status } from "./Status";
+import { Login } from "./Login";
+import { SessionList } from "./SessionList";
 import SessionPanel from "./SessionPanel";
 import {
   OfficePanel,
@@ -40,99 +31,6 @@ const connectionLabels = {
   offline: "Демон недоступний",
   unauthorized: "Потрібен локальний ключ",
 };
-
-function Login({ onToken }: { onToken: (token: string) => void }) {
-  const [value, setValue] = useState("");
-  return (
-    <div className="login-screen">
-      <div className="login-card">
-        <div className="brand-mark">
-          <Bot size={26} />
-        </div>
-        <h1>AgentWatch</h1>
-        <p>Ваш локальний простір для спостереження за агентами.</p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (value.trim()) {
-              sessionStorage.setItem(TOKEN_KEY, value.trim());
-              onToken(value.trim());
-            }
-          }}
-        >
-          <label htmlFor="local-token">Локальний ключ</label>
-          <input
-            id="local-token"
-            type="password"
-            autoComplete="off"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="Ключ із посилання у терміналі"
-          />
-          <button className="primary-button" type="submit">
-            Відкрити офіс <ArrowUpRight size={16} />
-          </button>
-        </form>
-        <p className="login-hint">
-          Запустіть <code>pnpm agentwatch start</code> та відкрийте посилання з
-          термінала.
-        </p>
-        <span className="privacy-note">
-          <LockKeyhole size={12} /> Усе залишається на цьому Mac
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function SessionList({
-  sessions,
-  now,
-  onSelect,
-}: {
-  sessions: Session[];
-  now: number;
-  onSelect: (key: string) => void;
-}) {
-  const selected = useTelemetry((s) => s.selectedKey);
-  return (
-    <div className="session-list">
-      <div className="list-header">
-        <span>АГЕНТ / СЕСІЯ</span>
-        <span>ПРОЄКТ І ЗАДАЧА</span>
-        <span>СТАН</span>
-      </div>
-      {sessions.map((s) => (
-        <button
-          key={s.key}
-          className={`session-row ${selected === s.key ? "selected" : ""}`}
-          id={`session-${s.key}`}
-          data-testid={`session-${s.key}`}
-          onClick={() => onSelect(s.key)}
-        >
-          <span className="row-identity">
-            <span className={`agent-avatar avatar-${s.provider}`}>
-              <Code2 size={19} />
-            </span>
-            <span>
-              <strong>{agentName(s.provider)}</strong>
-              <small className="mono">{s.sessionId.slice(0, 12)}</small>
-            </span>
-          </span>
-          <span className="row-task">
-            <strong>{s.project}</strong>
-            <small>{s.task?.text.slice(0, 90) ?? "Задача поки невідома"}</small>
-          </span>
-          <span className="row-status">
-            <Status session={s} />
-            <small>{relativeTime(s.lastActivityAt, now)}</small>
-          </span>
-          <ArrowUpRight size={15} className="row-arrow" />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 export default function Dashboard() {
   const [token, setToken] = useState<string | null | undefined>(undefined);
