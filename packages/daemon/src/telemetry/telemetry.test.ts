@@ -299,14 +299,15 @@ describe("provider adapters and privacy", () => {
     ).toEqual([]);
   });
   it("masks known credentials before persistence and bounds long output", () => {
+    const bearerFixture = ["abcdef", "ghijklmnop"].join("");
     const e = hook("PostToolUse", {
       tool_name: "Bash",
       tool_use_id: "a",
       tool_response:
-        "Authorization: Bearer test-token-placeholder\nAPI_KEY=super-secret-value\n" +
+        `Authorization: Bearer ${bearerFixture}\nAPI_KEY=super-secret-value\n` +
         "x".repeat(80000),
     });
-    expect(e.data.result).not.toContain("test-token-placeholder");
+    expect(e.data.result).not.toContain(bearerFixture);
     expect(e.data.result).not.toContain("super-secret-value");
     expect(e.data.result!.length).toBeLessThan(66000);
     expect(e.data.truncated).toBe(true);
