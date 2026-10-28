@@ -2,6 +2,20 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 
+declare global {
+  interface Window {
+    __agentwatchPerformance?: {
+      fps: number;
+      animationFps: number;
+      shadowUpdates: number;
+      frames: number;
+      calls: number;
+      triangles: number;
+      dpr: number;
+    };
+  }
+}
+
 export const ANIMATION_FPS = 20;
 
 // Tiny typing gestures need timed frames; camera and telemetry invalidate immediately.
