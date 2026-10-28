@@ -43,6 +43,50 @@ test.beforeEach(async ({ request }) => {
   });
 });
 
+test("process samples keep full panel text without reloading semantic details", async ({
+  page,
+  request,
+}) => {
+  const prompt = "Original task " + "full private text ".repeat(30);
+  await hook(request, "details-budget", "UserPromptSubmit", {
+    prompt,
+    turn_id: "details-1",
+  });
+  let detailRequests = 0;
+  page.on("request", (r) => {
+    if (new URL(r.url()).pathname === "/api/sessions/codex%3Adetails-budget")
+      detailRequests++;
+  });
+  await page.goto(`/?view=list#token=${UI_TOKEN}`);
+  await page.getByTestId("session-codex:details-budget").click();
+  await page.getByRole("button", { name: "Розгорнути запит" }).click();
+  await expect(page.getByTestId("task-text")).toHaveText(prompt);
+  expect(detailRequests).toBe(1);
+  await page.getByRole("tab", { name: "Деталі", exact: true }).click();
+  await request.post("/__test/process", {
+    headers: { Authorization: `Bearer ${HOOK_TOKEN}` },
+    data: { key: "codex:details-budget", cpuPercent: 5 },
+  });
+  await expect(page.getByTestId("session-panel")).toContainText("5.0 %");
+  await page.evaluate(
+    () =>
+      new Promise((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(resolve)),
+      ),
+  );
+  expect(detailRequests).toBe(1);
+  await hook(request, "details-budget", "UserPromptSubmit", {
+    prompt: "New task " + "new full text ".repeat(30),
+    turn_id: "details-2",
+  });
+  await expect.poll(() => detailRequests).toBe(2);
+  await page.getByRole("tab", { name: "Огляд", exact: true }).click();
+  await page.getByRole("button", { name: "Розгорнути запит" }).click();
+  await expect(page.getByTestId("task-text")).toHaveText(
+    "New task " + "new full text ".repeat(30),
+  );
+});
+
 test("only current work creates an office agent", async ({ page, request }) => {
   await hook(request, "current-work", "SessionStart");
   await page.goto(`/#token=${UI_TOKEN}`);

@@ -37,6 +37,7 @@ export function summarizeSession(session: Session): Session {
   // Even unusually long IDs or Unicode strings cannot inflate an initial frame.
   return {
     revision: session.revision,
+    detailsRevision: session.detailsRevision,
     key: session.key,
     sessionId: session.sessionId,
     provider: session.provider,

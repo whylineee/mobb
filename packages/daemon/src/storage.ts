@@ -72,12 +72,21 @@ export class SessionStorage {
         CREATE TRIGGER IF NOT EXISTS events_count_delete AFTER DELETE ON events BEGIN
           UPDATE event_counts SET count=count-1 WHERE session_key=OLD.session_key OR session_key='*';
         END;
-        UPDATE sessions SET lifecycle='unknown',data=json_remove(json_set(data,
+      `);
+      const reset = this.db
+        .prepare(
+          `UPDATE sessions SET lifecycle='unknown',data=json_remove(json_set(data,
+          '$.detailsRevision',(SELECT value+1 FROM meta WHERE key='revision'),
           '$.lifecycle','unknown','$.activity','unknown','$.freshness','stale',
           '$.activeTools',json('[]'),'$.requiresAttention',json('false')),'$.process')
-          WHERE lifecycle!='ended';
-        INSERT OR IGNORE INTO migrations VALUES (2);
-      `);
+          WHERE lifecycle!='ended'`,
+        )
+        .run();
+      if (reset.changes)
+        this.db
+          .prepare("UPDATE meta SET value=value+1 WHERE key='revision'")
+          .run();
+      this.db.exec("INSERT OR IGNORE INTO migrations VALUES (2)");
     })();
   }
 

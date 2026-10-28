@@ -27,5 +27,15 @@ testApp.post("/__test/reset", (c) => {
   app = makeApp();
   return c.json({ ok: true });
 });
+testApp.post("/__test/process", async (c) => {
+  if (c.req.header("authorization") !== `Bearer ${config.hookToken}`)
+    return c.text("unauthorized", 401);
+  const { key, cpuPercent } = await c.req.json<{
+    key: string;
+    cpuPercent: number;
+  }>();
+  service.updateProcess(key, { pid: 7, startedAt: 1, cpuPercent });
+  return c.json({ ok: true });
+});
 testApp.all("*", (c) => app.fetch(c.req.raw));
 serve({ fetch: testApp.fetch, hostname: "127.0.0.1", port: config.port });

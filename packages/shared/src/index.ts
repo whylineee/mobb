@@ -111,6 +111,7 @@ export type ProcessBinding = {
 };
 export type Session = {
   revision?: number;
+  detailsRevision?: number;
   isSummary?: boolean;
   activeToolCount?: number;
   key: string;

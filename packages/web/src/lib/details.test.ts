@@ -51,3 +51,36 @@ it("uses full text at a current revision while retaining newer process samples",
   expect(merged.task?.text).toHaveLength(1200);
   expect(merged.process?.cpuPercent).toBe(5);
 });
+
+it("keeps complete tool details across newer metric-only stream revisions", () => {
+  const full = {
+    ...summary,
+    detailsRevision: 8,
+    revision: 10,
+    activeTools: [
+      { id: "call", name: "Read", startedAt: 1000, command: "full command" },
+    ],
+  };
+  const live = {
+    ...summary,
+    detailsRevision: 8,
+    revision: 12,
+    activeTools: [
+      { id: "call", name: "Read", startedAt: 1000, command: "full…" },
+    ],
+    process: { pid: 7, startedAt: 1, cpuPercent: 5 },
+  };
+  expect(mergeDetails(live, full).activeTools[0]?.command).toBe("full command");
+  expect(mergeDetails(live, full).process?.cpuPercent).toBe(5);
+});
+
+it("rejects old semantic details even if their response has a newer global revision", () => {
+  const full = {
+    ...summary,
+    detailsRevision: 7,
+    revision: 30,
+    subagents: [{ id: "child", activity: "working" as const }],
+  };
+  const live = { ...summary, detailsRevision: 8, revision: 20 };
+  expect(mergeDetails(live, full).subagents[0]?.activity).toBe("idle");
+});

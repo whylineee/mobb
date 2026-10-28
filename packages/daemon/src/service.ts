@@ -98,6 +98,7 @@ export class AgentService {
         };
       }
       next = reduceSession(this.storage.get(event.sessionKey), applied);
+      next.detailsRevision = this.revision + 1;
       this.saveSession(next);
       this.storage.trimHistory(event.sessionKey);
       this.db
