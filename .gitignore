@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+dist/
+.superpowers/
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+*.tsbuildinfo
+.vitest/
+*.agentwatch-lock.sqlite*
+.env*
+
+# Locally generated knowledge graphs and extraction caches.
+graphify-out/
