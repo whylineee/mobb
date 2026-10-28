@@ -61,6 +61,12 @@ export class SessionStorage {
           "UPDATE sessions SET last_observed=coalesce(json_extract(data,'$.lastObservedAt'),last_activity)",
         );
       }
+      if (!columns.some((c) => c.name === "protected_open")) {
+        this.db.exec(
+          "ALTER TABLE sessions ADD COLUMN protected_open INTEGER NOT NULL DEFAULT 0",
+        );
+        this.db.exec("UPDATE sessions SET protected_open=(lifecycle='open')");
+      }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS sessions_overview ON sessions((lifecycle='open') DESC,last_observed DESC,key);
         INSERT OR REPLACE INTO event_counts SELECT session_key,count(*) FROM events GROUP BY session_key;
@@ -86,7 +92,7 @@ export class SessionStorage {
         this.db
           .prepare("UPDATE meta SET value=value+1 WHERE key='revision'")
           .run();
-      this.db.exec("INSERT OR IGNORE INTO migrations VALUES (2)");
+      this.db.exec("INSERT OR IGNORE INTO migrations VALUES (2), (3)");
     })();
   }
 
@@ -111,8 +117,9 @@ export class SessionStorage {
   save(session: Session): void {
     this.db
       .prepare(
-        `INSERT INTO sessions(key,lifecycle,last_activity,data,last_observed) VALUES (?,?,?,?,?)
-      ON CONFLICT(key) DO UPDATE SET lifecycle=excluded.lifecycle,last_activity=excluded.last_activity,data=excluded.data,last_observed=excluded.last_observed`,
+        `INSERT INTO sessions(key,lifecycle,last_activity,data,last_observed,protected_open) VALUES (?,?,?,?,?,?)
+      ON CONFLICT(key) DO UPDATE SET lifecycle=excluded.lifecycle,last_activity=excluded.last_activity,data=excluded.data,last_observed=excluded.last_observed,
+        protected_open=CASE WHEN excluded.lifecycle='unknown' THEN sessions.protected_open ELSE excluded.protected_open END`,
       )
       .run(
         session.key,
@@ -120,6 +127,7 @@ export class SessionStorage {
         session.lastActivityAt,
         JSON.stringify(session),
         session.lastObservedAt,
+        Number(session.lifecycle === "open"),
       );
   }
   count(): number {
@@ -181,9 +189,9 @@ export class SessionStorage {
     this.trim(key, this.limits.perSessionEvents);
     this.trim("*", this.limits.totalEvents);
   }
-  cleanup(now: number): string[] {
+  cleanup(now: number, onRemoved?: (keys: string[]) => void): void {
     const cutoff = now - RETENTION_MS;
-    const removed = this.db.transaction(() => {
+    this.db.transaction(() => {
       this.floor("*", cutoff - 1);
       this.db.prepare("DELETE FROM events WHERE occurred_at<?").run(cutoff);
       for (;;) {
@@ -199,24 +207,32 @@ export class SessionStorage {
       this.trim("*", this.limits.totalEvents);
       this.db
         .prepare(
-          "DELETE FROM events WHERE session_key IN (SELECT key FROM sessions WHERE lifecycle!='open' AND last_activity<?)",
+          "DELETE FROM events WHERE session_key IN (SELECT key FROM sessions WHERE lifecycle!='open' AND protected_open=0 AND last_activity<?)",
         )
         .run(cutoff);
+    })();
+    for (;;) {
+      // The startup path uses the same bounded batches without collecting a
+      // complete removal list. Liveness stays unknown until a fresh signal;
+      // protection of a previously open snapshot is a separate concern.
       const rows = this.db
         .prepare(
-          "DELETE FROM sessions WHERE lifecycle!='open' AND last_activity<? RETURNING key",
+          `DELETE FROM sessions WHERE key IN (
+        SELECT key FROM sessions WHERE lifecycle!='open' AND protected_open=0 AND last_activity<? LIMIT 256
+      ) RETURNING key`,
         )
         .all(cutoff) as { key: string }[];
-      this.db.exec(
-        "DELETE FROM event_counts WHERE session_key!='*' AND count=0 AND session_key NOT IN (SELECT key FROM sessions)",
-      );
-      this.db.exec(
-        "DELETE FROM history_floors WHERE session_key!='*' AND session_key NOT IN (SELECT key FROM sessions)",
-      );
-      return rows.map((row) => row.key);
-    })();
-    for (const key of removed) this.cache.delete(key);
-    return removed;
+      if (!rows.length) break;
+      const removed = rows.map((row) => row.key);
+      for (const key of removed) this.cache.delete(key);
+      onRemoved?.(removed);
+    }
+    this.db.exec(
+      "DELETE FROM event_counts WHERE session_key!='*' AND count=0 AND session_key NOT IN (SELECT key FROM sessions)",
+    );
+    this.db.exec(
+      "DELETE FROM history_floors WHERE session_key!='*' AND session_key NOT IN (SELECT key FROM sessions)",
+    );
   }
   close(): void {
     this.cache.clear();

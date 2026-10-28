@@ -167,7 +167,10 @@ it("upgrades a version-one database without discarding its current session snaps
   db.exec(
     "CREATE TABLE sessions (key TEXT PRIMARY KEY,lifecycle TEXT NOT NULL,last_activity INTEGER NOT NULL,data TEXT NOT NULL)",
   );
-  const session = reduceSession(undefined, event("legacy", "kept task"));
+  const session = reduceSession(
+    undefined,
+    event("legacy", "kept task", now - 8 * day),
+  );
   db.prepare("INSERT INTO sessions VALUES (?,?,?,?)").run(
     session.key,
     session.lifecycle,
@@ -182,4 +185,48 @@ it("upgrades a version-one database without discarding its current session snaps
     task: { text: "kept task" },
   });
   expect(service.snapshot().sessions[0]?.key).toBe("codex:legacy");
+});
+
+it("preserves an old open snapshot across restart until a confirmed end releases retention protection", () => {
+  const root = mkdtempSync(join(tmpdir(), "agentwatch-protected-"));
+  roots.push(root);
+  const path = join(root, "state.sqlite");
+  const initial = make(path);
+  initial.ingest(event("open", "current task", now - 8 * day));
+  initial.close();
+  let restored = make(path);
+  expect(restored.get("codex:open")).toMatchObject({
+    lifecycle: "unknown",
+    freshness: "stale",
+    task: { text: "current task" },
+  });
+  expect(restored.events("codex:open").events).toEqual([]);
+  restored.close();
+  restored = make(path);
+  restored.cleanup();
+  expect(restored.get("codex:open")?.task?.text).toBe("current task");
+  restored.ingest(event("open", "end", now, "SessionEnd"));
+  now += 8 * day;
+  restored.cleanup();
+  expect(restored.get("codex:open")).toBeUndefined();
+});
+
+it("batches large cleanup notifications instead of collecting every expired session at once", () => {
+  const service = make(":memory:", {
+    perSessionEvents: 3,
+    totalEvents: 1000,
+    cachedSessions: 2,
+  });
+  for (let i = 0; i < 600; i++)
+    service.ingest(event(String(i), String(i), now - 8 * day, "SessionEnd"));
+  const batches: string[][] = [];
+  service.subscribe((message) => {
+    if (message.type === "delta" && message.data.removedKeys)
+      batches.push(message.data.removedKeys);
+  });
+  service.cleanup();
+  expect(batches.every((batch) => batch.length <= 256)).toBe(true);
+  expect(new Set(batches.flat()).size).toBe(600);
+  expect(service.snapshot().sessions).toEqual([]);
+  expect(service.snapshot().omittedSessions).toBe(0);
 });

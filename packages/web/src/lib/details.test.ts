@@ -84,3 +84,22 @@ it("rejects old semantic details even if their response has a newer global revis
   const live = { ...summary, detailsRevision: 8, revision: 20 };
   expect(mergeDetails(live, full).subagents[0]?.activity).toBe("idle");
 });
+
+it("does not reuse an old full prompt when a same-clock edit changes only its hidden suffix", () => {
+  const prefix = "x".repeat(239);
+  const full = {
+    ...summary,
+    detailsRevision: 7,
+    task: {
+      text: prefix + "old suffix",
+      source: "hook" as const,
+      updatedAt: 1000,
+    },
+  };
+  const live = {
+    ...summary,
+    detailsRevision: 8,
+    task: { text: prefix + "…", source: "hook" as const, updatedAt: 1000 },
+  };
+  expect(mergeDetails(live, full).task?.text).toBe(prefix + "…");
+});

@@ -12,6 +12,7 @@ export function mergeDetails(summary: Session, full: Session | null): Session {
           full.lastObservedAt >= summary.lastObservedAt);
   const sameTask =
     full?.key === summary.key &&
+    full.detailsRevision === summary.detailsRevision &&
     full.task &&
     full.task.updatedAt === summary.task?.updatedAt &&
     full.task.text.startsWith(summary.task.text.replace(/…$/, ""));

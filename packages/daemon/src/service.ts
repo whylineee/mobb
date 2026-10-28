@@ -220,8 +220,7 @@ export class AgentService {
   }
 
   cleanup(): void {
-    const removed = this.storage.cleanup(this.now());
-    if (removed.length) {
+    this.storage.cleanup(this.now(), (removed) => {
       this.revision++;
       this.db
         .prepare("UPDATE meta SET value=? WHERE key='revision'")
@@ -230,7 +229,7 @@ export class AgentService {
         type: "delta",
         data: { revision: this.revision, removedKeys: removed },
       });
-    }
+    });
   }
 
   close(): void {
