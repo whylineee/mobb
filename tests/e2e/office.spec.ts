@@ -1,4 +1,9 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
+import {
+  test,
+  expect,
+  type APIRequestContext,
+  type Page,
+} from "@playwright/test";
 const UI_TOKEN = "agentwatch-e2e-ui-token-not-a-real-credential";
 const HOOK_TOKEN = "agentwatch-e2e-hook-token-not-a-real-credential";
 const hook = async (
@@ -22,6 +27,15 @@ const hook = async (
     },
   });
   expect(response.status()).toBe(202);
+};
+// UI panels can render before the deferred 3D module finishes loading.
+const renderedScene = async (page: Page) => {
+  await expect(page.locator("canvas")).toBeVisible();
+  await page.waitForFunction(
+    () =>
+      (window as unknown as { __agentwatchPerformance?: { frames: number } })
+        .__agentwatchPerformance?.frames! >= 3,
+  );
 };
 test.beforeEach(async ({ request }) => {
   await request.post("/__test/reset", {
@@ -154,7 +168,7 @@ test("empty office and accessible fallback do not require external requests", as
   expect(page.url()).not.toContain("token=");
 });
 
-test("office camera orbits, zooms and resets without changing the full-screen layout", async ({
+test("office camera locks its angle, bounds panning, zooms and resets", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -168,6 +182,7 @@ test("office camera orbits, zooms and resets without changing the full-screen la
         .__agentwatchPerformance?.frames! >= 3,
   );
   await page.getByRole("button", { name: "Показати весь офіс" }).click();
+  await page.mouse.move(760, 900);
   const home = await canvas.screenshot({
     path: "test-results/camera-home.png",
   });
@@ -175,11 +190,21 @@ test("office camera orbits, zooms and resets without changing the full-screen la
   await page.mouse.down();
   await page.mouse.move(960, 650, { steps: 16 });
   await page.mouse.up();
-  const rotated = await canvas.screenshot();
-  expect(rotated.equals(home)).toBe(false);
+  await page.mouse.move(760, 900);
+  const locked = await canvas.screenshot();
+  expect(locked.equals(home)).toBe(true);
   await page.getByRole("button", { name: "Наблизити", exact: true }).click();
-  expect((await canvas.screenshot()).equals(rotated)).toBe(false);
+  await page.mouse.move(760, 900);
+  const zoomed = await canvas.screenshot();
+  expect(zoomed.equals(home)).toBe(false);
+  await page.mouse.move(760, 600);
+  await page.mouse.down();
+  await page.mouse.move(1260, 800, { steps: 12 });
+  await page.mouse.up();
+  await page.mouse.move(760, 900);
+  expect((await canvas.screenshot()).equals(zoomed)).toBe(false);
   await page.getByRole("button", { name: "Показати весь офіс" }).click();
+  await page.mouse.move(760, 900);
   expect(
     (await canvas.screenshot({ path: "test-results/camera-reset.png" })).equals(
       home,
@@ -233,6 +258,7 @@ test("local key opens the office and connection failures preserve the room", asy
 }) => {
   await page.goto("/");
   await expect(page.getByLabel("Локальний ключ")).toBeVisible();
+  await page.screenshot({ path: "test-results/office-login.png" });
   await page.getByLabel("Локальний ключ").fill(UI_TOKEN);
   await page.getByRole("button", { name: "Відкрити офіс" }).click();
   await expect(page.locator("canvas")).toHaveJSProperty("clientWidth", 1440);
@@ -262,6 +288,7 @@ test("connecting and partial telemetry are disclosed without hiding the office",
   await page.goto(`/#token=${UI_TOKEN}`);
   await expect(page.getByText("З’єднання…", { exact: true })).toBeVisible();
   await expect(page.locator("canvas")).toHaveJSProperty("clientWidth", 1440);
+  await page.screenshot({ path: "test-results/office-connecting.png" });
   release();
   await expect(page.getByText(/Ще 7 збережено локально/)).toBeVisible();
   await expect(page.locator("canvas")).toBeVisible();
@@ -459,4 +486,228 @@ test("observed hook changes reach the panel within the latency budget", async ({
   const p95 = samples.sort((a, b) => a - b)[18]!;
   console.log("Hook → visible panel p95 upper bound:", p95, "ms");
   expect(p95).toBeLessThanOrEqual(1000);
+});
+
+test("task board tracks current sessions and shares counters with statistics", async ({
+  page,
+  request,
+}) => {
+  await hook(request, "board-work", "UserPromptSubmit", {
+    prompt: "Перевірити офіс " + "довгий текст ".repeat(50),
+    turn_id: "board-turn",
+  });
+  await hook(request, "board-idle", "SessionStart", {}, "claude");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`/#token=${UI_TOKEN}`);
+  await page.getByRole("button", { name: "Таскборд", exact: true }).click();
+  await expect(
+    page.getByTestId("tasks-working").getByTestId("task-codex:board-work"),
+  ).toBeVisible();
+  await expect(
+    page.getByTestId("tasks-idle").getByTestId("task-claude:board-idle"),
+  ).toBeVisible();
+  await expect(page.getByTestId("task-claude:board-idle")).toContainText(
+    "Задача поки невідома",
+  );
+  await expect(page.getByTestId("count-working")).toContainText("1");
+  await hook(request, "board-work", "Notification", {
+    notification_type: "permission_prompt",
+  });
+  await expect(
+    page.getByTestId("tasks-waiting").getByTestId("task-codex:board-work"),
+  ).toBeVisible();
+  await hook(request, "board-work", "Stop", { turn_id: "board-turn" });
+  await expect(
+    page.getByTestId("tasks-idle").getByTestId("task-codex:board-work"),
+  ).toBeVisible();
+  await expect(page.getByTestId("count-idle")).toContainText("2");
+  await renderedScene(page);
+  await page.screenshot({ path: "test-results/office-taskboard-desktop.png" });
+  await page.getByRole("button", { name: "Статистика", exact: true }).click();
+  await expect(page.getByTestId("open-session-count")).toHaveText("2");
+  await expect(page.locator("#office-stats")).toContainText("Недоступно");
+  await hook(request, "board-work", "SessionEnd");
+  await expect(page.getByTestId("task-codex:board-work")).toHaveCount(0);
+  await expect(page.getByTestId("open-session-count")).toHaveText("1");
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "Статистика", exact: true }),
+  ).toBeFocused();
+  await expect(page.getByTestId("task-board")).toBeVisible();
+  await page.getByRole("button", { name: "Стан джерел", exact: true }).click();
+  await expect(page.locator("#office-sources")).toContainText(
+    "Дані про джерела поки недоступні",
+  );
+  await page.getByRole("button", { name: "Офіс", exact: true }).click();
+  await expect(page.locator(".office-tool-panel")).toHaveCount(0);
+});
+
+test("mobile task details return to the previous panel and restore keyboard focus", async ({
+  page,
+  request,
+}) => {
+  await hook(request, "mobile-task", "UserPromptSubmit", {
+    prompt: "Мобільна задача",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`/#token=${UI_TOKEN}`);
+  await page.getByRole("button", { name: "Статистика", exact: true }).click();
+  await page.getByRole("button", { name: "Таскборд", exact: true }).click();
+  const task = page.getByTestId("task-codex:mobile-task");
+  await task.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("session-panel")).toContainText(
+    "Мобільна задача",
+  );
+  await expect(page.locator(".office-tool-panel")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("task-board")).toBeVisible();
+  await expect(task).toBeFocused();
+  await expect(page.locator(".office-tool-panel")).toHaveCount(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    390,
+  );
+  await page.screenshot({ path: "test-results/office-taskboard-mobile.png" });
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("button", { name: "Таскборд", exact: true }),
+  ).toBeFocused();
+});
+
+test("edge agent focus remains between panels after viewport changes", async ({
+  page,
+  request,
+}) => {
+  for (let i = 0; i < 20; i++)
+    await hook(request, `edge-${i}`, "UserPromptSubmit");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`/#token=${UI_TOKEN}`);
+  await page.getByRole("button", { name: "Таскборд", exact: true }).click();
+  await page.getByTestId("task-codex:edge-19").click();
+  const marker = page.getByRole("button", {
+    name: "Вибрати Codex edge-19",
+    exact: true,
+  });
+  await expect(page.getByTestId("session-panel")).toBeVisible();
+  for (const width of [1440, 1680]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect
+      .poll(async () => {
+        const bounds = await marker.boundingBox();
+        return (
+          !!bounds &&
+          bounds.x > 622 &&
+          bounds.x + bounds.width < width - 438 &&
+          bounds.y > 48 &&
+          bounds.y + bounds.height < 900
+        );
+      })
+      .toBe(true);
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.screenshot({ path: "test-results/office-panels-focus.png" });
+});
+
+test("partial statistics and collector health use available evidence", async ({
+  page,
+}) => {
+  const now = Date.now();
+  const common = {
+    provider: "codex",
+    origin: "cli",
+    project: "Evidence",
+    lifecycle: "open",
+    activity: "working",
+    freshness: "fresh",
+    requiresAttention: false,
+    lastActivityAt: now,
+    lastObservedAt: now,
+    stateAt: now,
+    activeTools: [],
+    subagents: [],
+    sources: ["hook"],
+  };
+  await page.route("**/api/stream", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: `event: snapshot\ndata: ${JSON.stringify({
+        sessions: [
+          {
+            ...common,
+            key: "codex:metrics",
+            sessionId: "metrics",
+            turnStartedAt: now - 65000,
+            task: { text: "Зібрати метрики", source: "hook", updatedAt: now },
+            process: {
+              pid: 7,
+              startedAt: now - 65000,
+              cpuPercent: 12.5,
+              memoryBytes: 134217728,
+            },
+          },
+          {
+            ...common,
+            key: "codex:stale",
+            sessionId: "stale",
+            freshness: "stale",
+          },
+        ],
+        revision: 1,
+        serverTime: now,
+        omittedSessions: 3,
+        collectors: [
+          {
+            id: "codex-log",
+            state: "ready",
+            message: "Журнал доступний",
+            lastCheckedAt: now,
+            lastEventAt: now,
+            droppedEvents: 0,
+          },
+          {
+            id: "claude-hooks",
+            state: "unavailable",
+            message: "Hooks недоступні",
+            lastCheckedAt: now,
+            droppedEvents: 2,
+          },
+          {
+            id: "process",
+            state: "error",
+            message: "Не вдалося прочитати процеси",
+            lastCheckedAt: now,
+            droppedEvents: 1,
+          },
+        ],
+      })}\n\n`,
+    }),
+  );
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`/#token=${UI_TOKEN}`);
+  await page.getByRole("button", { name: "Таскборд", exact: true }).click();
+  await expect(page.getByTestId("tasks-unknown")).toContainText("stale");
+  await expect(page.getByTestId("count-unknown")).toContainText("1");
+  await expect(page.getByText(/Ще 3 збережено локально/)).toBeVisible();
+  await page.getByRole("button", { name: "Статистика", exact: true }).click();
+  await expect(page.getByTestId("open-session-count")).toHaveText("2");
+  await expect(page.locator("#office-stats")).toContainText("12.5 %");
+  await expect(page.locator("#office-stats")).toContainText("128.0 MB");
+  await expect(page.locator("#office-stats")).toContainText("1 хв");
+  await expect(page.locator("#office-stats")).toContainText("Недоступно");
+  await renderedScene(page);
+  await page.screenshot({ path: "test-results/office-statistics.png" });
+  await page.getByRole("button", { name: "Стан джерел", exact: true }).click();
+  await expect(page.locator("#office-sources")).toContainText("Готове");
+  await expect(page.locator("#office-sources")).toContainText(
+    "Hooks недоступні",
+  );
+  await expect(page.locator("#office-sources")).toContainText(
+    "Не вдалося прочитати процеси",
+  );
+  await expect(page.locator("#office-sources")).toContainText(
+    "Пропущено подій",
+  );
+  await page.screenshot({ path: "test-results/office-sources.png" });
 });

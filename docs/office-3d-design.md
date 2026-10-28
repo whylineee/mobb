@@ -1,44 +1,48 @@
-# Full-screen 3D office
+# Fixed-angle office and live monitoring panels
 
-The primary screen is the office itself. Remove the dashboard navigation,
-metrics, headings, filters, legend and card frame. Keep the authenticated live
-session connection. A quiet list button provides keyboard access and a WebGL
-fallback. Session details appear only after selecting an agent, over the scene.
+The existing furnished cutaway office, palette, robots, seat allocation and
+room expansion remain the primary surface. Linear lights use visible wall
+cantilevers, crossbars and short hangers, with no ceiling covering the room.
 
-Use the existing React Three Fiber / Three.js renderer. Model a furnished
-cutaway office with permanent workstations, a glass meeting room, lounge,
-kitchenette, shelving, plants, window frames and daylight shadows. No room
-image, external model, font or texture request. Robots represent only confirmed
-live sessions currently working on a task or waiting for input within that task.
-Historical, unknown, stale, idle and ended sessions do not create robots. A task
-completion removes its robot immediately while preserving the session history
-and any already-open details. Active sessions retain stable seat assignments.
+The orthographic camera keeps the existing isometric angle at every viewport.
+Drag pans along the floor, wheel/pinch and buttons zoom, and reset shows the
+whole room. Minimum zoom fits the room and locks panning; maximum zoom is four
+times that fit. A shared camera layout projects room bounds, accounts for tool
+panels, clamps the logical floor target and preserves camera orientation for
+all input paths, focus transitions and viewport changes. Selected agents stay
+in the free area between desktop panels. Reduced motion skips focus animation.
 
-Palette: oak #c5aa82, sage #8e9b83, plaster #d5d8c9, graphite #364440,
-foliage #52775c, canvas #65766c. Existing system sans for small controls;
-typography stays subordinate to the space. The room is the memorable element.
+Left tools are Office, Agents and Task Board; right tools are Statistics and
+Source Health. Panels overlay the scene without remounting the Canvas. A left
+panel and one right panel can coexist on desktop. Session details replace the
+right tool. Narrow viewports show only one panel and restore the prior panel
+and activating control when details close. Escape closes the most recent panel;
+Office closes tools and restores the room. Buttons have labels, titles, pressed
+states, visible focus and at least 44px touch targets.
 
-Layout: `viewport → full-bleed Canvas → cutaway office`. Pointer drag rotates,
-wheel/pinch zooms, right drag/two-finger drag pans. Reset restores camera
-position, target and zoom. The complete room fits initially on desktop and
-portrait screens. No permanent side panels; the scene never resizes for a
-session drawer.
+A shared frontend selector groups confirmed open sessions by working, attention,
+waiting for a prompt and unknown status. Task cards show provider, short session
+ID, project, latest prompt preview and update time. Stale sessions are unknown;
+ended and historically unconfirmed sessions do not enter the live board. A
+stopped turn waits for another prompt; it does not claim task completion.
+Selecting a card uses the existing full-detail endpoint and session drawer.
 
-Target viewports: 1440x1000 and 390x844. Respect reduced motion, keep 44px
-touch controls, visible keyboard focus, accessible list selection, Escape
-closing, and no document overflow. Loading uses a stable full-screen surface;
-empty state keeps furniture visible; offline state retains last data; missing
-WebGL opens the session list; partial telemetry is disclosed; authorization
-uses the existing local-key form.
+Statistics and the bottom counters use the same session population. Statistics
+show provider/status counts, current-turn duration and available process CPU/RAM
+per session. Missing measurements are unavailable, never zero. Source health
+uses existing collector state, last signal/check times and dropped-event counts.
+Offline data remains visible with its connection warning. Omitted sessions are
+disclosed; counts describe the loaded overview, not a global historical total.
+No public API, Session type, database, dependency or agent-control capability is
+added. No task editing, history analytics, token counts or cost estimates.
 
-Agent markers are compact 22px circles. Provider, session ID and task are
-shown on hover or keyboard focus; the session list remains the larger-touch
-alternative. Preserve the display pixel ratio up to 2x, including under load.
-Adapt mesh detail and shadows instead of lowering render resolution. Static
-furniture instance matrices update only when the scene changes; robot parts
-remain in an independent animated instance batch.
+Only confirmed live work and attention create robots. Idle, ended, historical
+and stale sessions do not. An already-open detail drawer survives session end.
+The accessible agent list remains the WebGL fallback. Existing authentication,
+text redaction, bounded summaries, full-detail loading, SSE resync, native pixel
+density and adaptive geometry/shadows remain in place.
 
-Implementation: simplify Dashboard, model permanent room furniture, enable
-camera rotation/reset, add scoped full-screen CSS, then run typecheck, build,
-existing tests and browser checks for viewport coverage, orbit/reset,
-selection, live updates and WebGL fallback. Capture desktop/mobile evidence.
+Target viewports are 1440x1000 and 390x844. Validate camera fit and constraints,
+edge-agent focus between panels, keyboard focus restoration, task transitions,
+partial/missing telemetry, offline/reconnect, authentication and WebGL fallback.
+Capture rendered office, board and monitoring states after a production build.
