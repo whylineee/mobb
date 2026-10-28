@@ -335,6 +335,7 @@ export default function Dashboard() {
             selectedKey={selectedKey}
             labels
             reducedMotion={reduced}
+            online={connection === "online"}
             onSelect={selectSession}
             onFallback={fallback}
             insets={insets}
