@@ -162,9 +162,11 @@ function TimelineEvent({ event }: { event: AgentEvent }) {
 export default function SessionPanel({
   session: summary,
   token,
+  onClose,
 }: {
   session: Session;
   token: string;
+  onClose: () => void;
 }) {
   const [fullDetails, setFullDetails] = useState<Session | null>(null);
   const [tab, setTab] = useState<"overview" | "activity" | "details">(
@@ -192,7 +194,7 @@ export default function SessionPanel({
     token,
     syncVersion,
   ]);
-  const close = () => telemetryStore.getState().select(null);
+  const close = onClose;
   const scroll = useRef<HTMLDivElement>(null),
     closeButton = useRef<HTMLButtonElement>(null);
   const following = useRef(true);
@@ -214,11 +216,6 @@ export default function SessionPanel({
   }, [events, tab]);
   useEffect(() => {
     closeButton.current?.focus({ preventScroll: true });
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
   }, []);
   useEffect(() => {
     const controller = new AbortController();

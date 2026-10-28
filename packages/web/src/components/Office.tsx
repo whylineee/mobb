@@ -25,6 +25,13 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { Bot, Focus, Minus, Plus } from "lucide-react";
 import { sessionStatus, type Session } from "@agentwatch/shared";
 import { agentName, STATUS_LABELS } from "./Status";
+import {
+  HOME,
+  CAMERA_OFFSET,
+  officeCameraLayout,
+  clampOfficeCenter,
+  type SceneInsets,
+} from "../lib/office-camera";
 
 type Props = {
   sessions: Session[];
@@ -34,10 +41,11 @@ type Props = {
   reducedMotion: boolean;
   onSelect: (key: string | null) => void;
   onFallback: () => void;
+  insets: SceneInsets;
+  resetId: number;
 };
 type Seat = [number, number, number];
 type Controls = { target: Vector3; update: () => void };
-const HOME: Seat = [26, 27, 30];
 const [SolidInstances, Solid] = createInstances();
 const [GlowInstances, Glow] = createInstances();
 const [SoftInstances, Soft] = createInstances();
@@ -598,27 +606,47 @@ function Room({ rows, shadows }: { rows: number; shadows: boolean }) {
       <Plant position={[-11.8, 0.05, back + 5]} scale={1.5} />
       <Plant position={[11.6, 0.05, 1.8]} scale={1.65} />
       <Plant position={[-11.8, 0.05, -0.3]} scale={1.4} />
-      {/* Suspended linear lights model the ceiling without hiding the floor. */}
+      {/* Wall-mounted cantilevers support the lights without hiding the floor. */}
       {[-4.3, 2.5].map((x) => (
-        <group key={x} position={[x, 4.6, -2]}>
+        <group key={x}>
+          {[-0.32, 0.32].map((dx) => (
+            <group key={dx}>
+              <Box
+                position={[x + dx, 3.48, back + 0.25]}
+                size={[0.18, 0.55, 0.22]}
+                color="#53635a"
+              />
+              <Box
+                position={[x + dx, 3.7, (back + 1) / 2]}
+                size={[0.08, 0.12, 1 - back]}
+                color="#53635a"
+              />
+            </group>
+          ))}
+          {[-5, 1].map((z) => (
+            <Box
+              key={`crossbar-${z}`}
+              position={[x, 3.7, z]}
+              size={[0.75, 0.12, 0.1]}
+              color="#53635a"
+            />
+          ))}
+          {[-5, 1].map((z) => (
+            <Box
+              key={z}
+              position={[x, 3.53, z]}
+              size={[0.025, 0.34, 0.025]}
+              color="#53635a"
+            />
+          ))}
           <Box
-            position={[0, 0.9, -3]}
-            size={[0.025, 1.8, 0.025]}
-            color="#53635a"
-          />
-          <Box
-            position={[0, 0.9, 3]}
-            size={[0.025, 1.8, 0.025]}
-            color="#53635a"
-          />
-          <Box
-            position={[0, 0, 0]}
+            position={[x, 3.35, -2]}
             size={[0.22, 0.16, 7]}
             color="#46594f"
             rounded
           />
           <Box
-            position={[0, -0.095, 0]}
+            position={[x, 3.255, -2]}
             size={[0.16, 0.035, 6.8]}
             color="#eee6bd"
             emissive="#eee6bd"
@@ -932,74 +960,107 @@ function CameraRig({
   action,
   reduced,
   rows,
+  insets,
+  resetId,
 }: {
   focus: Seat | undefined;
   action: { type: string; id: number };
   reduced: boolean;
   rows: number;
+  insets: SceneInsets;
+  resetId: number;
 }) {
   const { camera, size, invalidate } = useThree();
   const controls = useRef<Controls | null>(null);
-  const depth = Math.max(20, rows * 3.25 + 3);
-  const portrait = size.width < size.height * 0.75;
-  const home = useMemo<Seat>(() => (portrait ? [38, 48, 4] : HOME), [portrait]);
-  const baseZoom = portrait
-    ? Math.min(size.width / (depth * 1.08), size.height / 32)
-    : Math.min(
-        size.width / (21 + depth * 0.7),
-        size.height / (19 + depth * 0.38),
+  const layout = useMemo(
+    () => officeCameraLayout(size.width, size.height, rows, insets),
+    [
+      size.width,
+      size.height,
+      rows,
+      insets.left,
+      insets.right,
+      insets.top,
+      insets.bottom,
+    ],
+  );
+  const logical = useRef(new Vector3(0, 0.8, 0));
+  const goal = useRef<{ center: Vector3; zoom: number } | null>(null);
+  const previousZoom = useRef<number | null>(null);
+  const changing = useRef(false);
+  const appliedZoom = useRef(layout.baseZoom);
+  const apply = useCallback(
+    (center: Vector3, zoom: number) => {
+      changing.current = true;
+      camera.zoom = Math.max(
+        layout.baseZoom,
+        Math.min(layout.baseZoom * 4, zoom),
       );
+      appliedZoom.current = camera.zoom;
+      logical.current.copy(
+        clampOfficeCenter(center, camera.zoom, layout.baseZoom, layout.depth),
+      );
+      const target = logical.current.clone().add(layout.offset(camera.zoom));
+      controls.current?.target.copy(target);
+      camera.position.copy(target).add(CAMERA_OFFSET);
+      camera.lookAt(target);
+      camera.updateProjectionMatrix();
+      controls.current?.update();
+      changing.current = false;
+      invalidate();
+    },
+    [camera, layout, invalidate],
+  );
   useEffect(() => {
-    camera.position.set(...home);
-    camera.lookAt(0, 0.8, 0);
-    controls.current?.update();
-    invalidate();
-  }, [home, camera, invalidate]);
-  const goal = useRef<{ target: Vector3; zoom: number } | null>(null);
+    const ratio = previousZoom.current ? camera.zoom / previousZoom.current : 1;
+    previousZoom.current = layout.baseZoom;
+    goal.current = null;
+    apply(logical.current, layout.baseZoom * Math.max(1, Math.min(4, ratio)));
+  }, [layout, apply, camera]);
   useEffect(() => {
     goal.current = {
-      target: focus
+      center: focus
         ? new Vector3(focus[0], 0.8, focus[2])
         : new Vector3(0, 0.8, 0),
-      zoom: focus ? baseZoom * 1.65 : baseZoom,
+      zoom: focus ? layout.baseZoom * 1.65 : layout.baseZoom,
     };
     invalidate();
-  }, [focus?.[0], focus?.[2], baseZoom, invalidate]);
+  }, [focus?.[0], focus?.[2], layout, invalidate]);
+  useEffect(() => {
+    goal.current = null;
+    apply(new Vector3(0, 0.8, 0), layout.baseZoom);
+  }, [resetId]);
   useEffect(() => {
     if (!action.id) return;
-    if (action.type === "reset") {
-      goal.current = null;
-      camera.position.set(...home);
-      controls.current?.target.set(0, 0.8, 0);
-      camera.zoom = baseZoom;
-      camera.lookAt(0, 0.8, 0);
-      controls.current?.update();
-    } else {
-      goal.current = null;
-      camera.zoom *= action.type === "in" ? 1.2 : 1 / 1.2;
-      camera.zoom = Math.max(
-        baseZoom * 0.55,
-        Math.min(baseZoom * 4, camera.zoom),
-      );
-    }
-    camera.updateProjectionMatrix();
-    invalidate();
-  }, [action, baseZoom, camera, home, invalidate]);
+    goal.current = null;
+    apply(
+      action.type === "reset" ? new Vector3(0, 0.8, 0) : logical.current,
+      action.type === "reset"
+        ? layout.baseZoom
+        : camera.zoom * (action.type === "in" ? 1.2 : 1 / 1.2),
+    );
+  }, [action]);
   useFrame((_, delta) => {
-    if (!goal.current || !controls.current) return;
+    if (!goal.current) return;
+    const destination = goal.current;
+    const bounded = clampOfficeCenter(
+      destination.center.clone(),
+      destination.zoom,
+      layout.baseZoom,
+      layout.depth,
+    );
     const alpha = reduced ? 1 : 1 - Math.exp(-delta * 7);
-    const old = controls.current.target.clone();
-    controls.current.target.lerp(goal.current.target, alpha);
-    camera.position.add(controls.current.target.clone().sub(old));
-    camera.zoom += (goal.current.zoom - camera.zoom) * alpha;
-    camera.updateProjectionMatrix();
-    controls.current.update();
+    apply(
+      logical.current.clone().lerp(bounded, alpha),
+      camera.zoom + (destination.zoom - camera.zoom) * alpha,
+    );
     if (
-      controls.current.target.distanceTo(goal.current.target) < 0.01 &&
-      Math.abs(camera.zoom - goal.current.zoom) < 0.01
-    )
+      logical.current.distanceTo(bounded) < 0.01 &&
+      Math.abs(camera.zoom - destination.zoom) < 0.01
+    ) {
       goal.current = null;
-    else invalidate();
+      apply(bounded, destination.zoom);
+    }
   });
   return (
     <OrbitControls
@@ -1007,24 +1068,26 @@ function CameraRig({
         controls.current = value;
       }}
       makeDefault
-      enableRotate
+      enableRotate={false}
       enablePan
       enableZoom
-      target={[0, 0.8, 0]}
-      enableDamping={!reduced}
-      dampingFactor={0.12}
-      minPolarAngle={0.22}
-      maxPolarAngle={Math.PI / 2.12}
-      minZoom={baseZoom * 0.55}
-      maxZoom={baseZoom * 4}
-      mouseButtons={{
-        LEFT: MOUSE.ROTATE,
-        MIDDLE: MOUSE.DOLLY,
-        RIGHT: MOUSE.PAN,
-      }}
-      touches={{ ONE: TOUCH.ROTATE, TWO: TOUCH.DOLLY_PAN }}
+      enableDamping={false}
+      screenSpacePanning={false}
+      minZoom={layout.baseZoom}
+      maxZoom={layout.baseZoom * 4}
+      mouseButtons={{ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.PAN }}
+      touches={{ ONE: TOUCH.PAN, TWO: TOUCH.DOLLY_PAN }}
       onStart={() => {
         goal.current = null;
+      }}
+      onChange={() => {
+        if (changing.current || !controls.current) return;
+        apply(
+          controls.current.target
+            .clone()
+            .sub(layout.offset(appliedZoom.current)),
+          camera.zoom,
+        );
       }}
     />
   );
@@ -1267,6 +1330,8 @@ export default function Office(props: Props) {
             action={action}
             reduced={props.reducedMotion}
             rows={rows}
+            insets={props.insets}
+            resetId={props.resetId}
           />
           <PerformanceMeter
             onLowFps={lowerQuality}
