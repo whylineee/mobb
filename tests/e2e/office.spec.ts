@@ -34,7 +34,7 @@ const renderedScene = async (page: Page) => {
   await page.waitForFunction(
     () =>
       (window as unknown as { __agentwatchPerformance?: { frames: number } })
-        .__agentwatchPerformance?.frames! >= 3,
+        .__agentwatchPerformance?.frames! >= 1,
   );
 };
 test.beforeEach(async ({ request }) => {
@@ -179,7 +179,7 @@ test("office camera locks its angle, bounds panning, zooms and resets", async ({
   await page.waitForFunction(
     () =>
       (window as unknown as { __agentwatchPerformance?: { frames: number } })
-        .__agentwatchPerformance?.frames! >= 3,
+        .__agentwatchPerformance?.frames! >= 1,
   );
   await page.getByRole("button", { name: "Показати весь офіс" }).click();
   await page.mouse.move(760, 900);
@@ -373,7 +373,7 @@ test("ended robots disappear immediately while their drawer stays open", async (
   await expect(page.getByTestId("session-panel")).toContainText("alpha");
 });
 
-test("renders twenty robots and allows scene selection", async ({
+test("renders twenty mascot agents within the animation budget and allows selection", async ({
   page,
   request,
 }) => {
@@ -399,12 +399,19 @@ test("renders twenty robots and allows scene selection", async ({
     () =>
       (
         window as unknown as {
-          __agentwatchPerformance: { fps: number; calls: number };
+          __agentwatchPerformance: {
+            fps: number;
+            calls: number;
+            animationFps: number;
+          };
         }
       ).__agentwatchPerformance,
   );
   console.log("20-session office benchmark:", JSON.stringify(performance));
-  expect(performance.fps).toBeGreaterThanOrEqual(30);
+  expect(performance.animationFps).toBe(20);
+  expect(performance.fps).toBeGreaterThanOrEqual(10);
+  expect(performance.fps).toBeLessThanOrEqual(24);
+  expect(performance.calls).toBeLessThanOrEqual(12);
   await page.getByTestId("robot-label").first().click();
   await expect(page.getByTestId("session-panel")).toBeVisible();
   await page.screenshot({ path: "test-results/agentwatch-office.png" });
@@ -710,4 +717,141 @@ test("partial statistics and collector health use available evidence", async ({
     "Пропущено подій",
   );
   await page.screenshot({ path: "test-results/office-sources.png" });
+});
+
+test("mascot agents face their workstations and preserve attention selection", async ({
+  page,
+  request,
+}) => {
+  await hook(request, "mascot", "UserPromptSubmit", {
+    prompt: "Перевірити нову модель агента",
+    turn_id: "mascot-turn",
+  });
+  await hook(request, "mascot-second", "UserPromptSubmit", {
+    prompt: "Перевірити нову модель агента",
+    turn_id: "mascot-turn",
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`/#token=${UI_TOKEN}`);
+  await renderedScene(page);
+  const marker = page.getByRole("button", {
+    name: "Вибрати Codex mascot",
+    exact: true,
+  });
+  await marker.click();
+  await expect(page.getByTestId("session-panel")).toContainText(
+    "Перевірити нову модель агента",
+  );
+  await page.screenshot({ path: "test-results/mascot-office-desktop.png" });
+  for (let i = 0; i < 6; i++)
+    await page.getByRole("button", { name: "Наблизити", exact: true }).click();
+  const bounds = await marker.boundingBox();
+  expect(bounds).not.toBeNull();
+  await page.screenshot({
+    path: "test-results/mascot-closeup.png",
+    clip: {
+      x: Math.max(0, Math.min(940, bounds!.x - 210)),
+      y: Math.max(0, Math.min(500, bounds!.y - 50)),
+      width: 500,
+      height: 500,
+    },
+  });
+  await hook(request, "mascot", "Notification", {
+    notification_type: "permission_prompt",
+  });
+  await expect(page.getByTestId("panel-status")).toHaveText("Потрібна увага");
+  await page.screenshot({ path: "test-results/mascot-attention.png" });
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Показати весь офіс" }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(marker).toBeVisible();
+  await page.screenshot({ path: "test-results/mascot-office-mobile.png" });
+});
+
+test("scene sleeps when static, stops in the background, and caps typing frames", async ({
+  page,
+  request,
+}) => {
+  const frames = () =>
+    page.evaluate(
+      () =>
+        (window as unknown as { __agentwatchPerformance: { frames: number } })
+          .__agentwatchPerformance.frames,
+    );
+  await page.goto(`/#token=${UI_TOKEN}`);
+  await renderedScene(page);
+  await page.waitForTimeout(250);
+  const idleStart = await frames();
+  await page.waitForTimeout(1200);
+  expect((await frames()) - idleStart).toBe(0);
+  await hook(request, "render-budget", "UserPromptSubmit");
+  await expect(page.getByTestId("robot-label")).toHaveCount(1);
+  await page.waitForTimeout(300);
+  const workingStart = await frames();
+  const shadowStart = await page.evaluate(
+    () =>
+      (
+        window as unknown as {
+          __agentwatchPerformance: { shadowUpdates: number };
+        }
+      ).__agentwatchPerformance.shadowUpdates,
+  );
+  await page.waitForTimeout(1200);
+  const animatedFrames = (await frames()) - workingStart;
+  expect(animatedFrames).toBeGreaterThanOrEqual(8);
+  expect(animatedFrames).toBeLessThanOrEqual(30);
+  const shadowRefreshes =
+    (await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __agentwatchPerformance: { shadowUpdates: number };
+          }
+        ).__agentwatchPerformance.shadowUpdates,
+    )) - shadowStart;
+  expect(shadowRefreshes).toBe(0);
+  console.log(
+    "Render budget over 1.2s:",
+    JSON.stringify({ idleFrames: 0, animatedFrames, shadowRefreshes }),
+  );
+  await hook(request, "render-budget", "Notification", {
+    notification_type: "permission_prompt",
+  });
+  await expect(
+    page.getByTestId("robot-label").locator(".dot-waiting"),
+  ).toHaveCount(1);
+  await page.waitForTimeout(300);
+  const waitingStart = await frames();
+  // Identical live signals update timestamps, not the 3D appearance.
+  for (let i = 0; i < 3; i++)
+    await hook(request, "render-budget", "Notification", {
+      notification_type: "permission_prompt",
+    });
+  await page.waitForTimeout(1200);
+  expect((await frames()) - waitingStart).toBe(0);
+  await hook(request, "render-budget", "UserPromptSubmit");
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      get: () => true,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await page.waitForTimeout(300);
+  const hiddenStart = await frames();
+  await page.waitForTimeout(1200);
+  expect((await frames()) - hiddenStart).toBe(0);
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", {
+      configurable: true,
+      get: () => false,
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect.poll(frames).toBeGreaterThan(hiddenStart);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.waitForTimeout(300);
+  const reducedStart = await frames();
+  await page.waitForTimeout(1200);
+  expect((await frames()) - reducedStart).toBe(0);
 });
