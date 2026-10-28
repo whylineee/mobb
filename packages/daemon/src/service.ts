@@ -7,11 +7,14 @@ import {
   type StateSnapshot,
   type StreamMessage,
   type ProcessBinding,
+  type AnalyticsFilter,
+  type AgentQuery,
 } from "@agentwatch/shared";
 import { reduceSession } from "./telemetry/reducer.js";
 import { MAX_OVERVIEW_SESSIONS, summarizeSession } from "./summary.js";
 
 import { SessionStorage, type StorageLimits } from "./storage.js";
+import { Analytics } from "./analytics.js";
 
 type Listener = (message: StreamMessage) => void;
 type Row = { data: string };
@@ -24,6 +27,7 @@ export class AgentService {
   private revision = 0;
   private closed = false;
   private now: () => number;
+  private analytics: Analytics;
 
   constructor(options: {
     dbPath: string;
@@ -33,6 +37,11 @@ export class AgentService {
     this.now = options.now ?? Date.now;
     this.storage = new SessionStorage(options.dbPath, options.limits);
     this.db = this.storage.db;
+    this.analytics = new Analytics(
+      this.db,
+      () => this.storage.analyticsSessions(),
+      this.now,
+    );
     this.revision = (
       this.db.prepare("SELECT value FROM meta WHERE key='revision'").get() as {
         value: number;
@@ -46,6 +55,25 @@ export class AgentService {
   }
 
   ingest(event: AgentEvent): boolean {
+    if (event.kind === "usage") {
+      if (this.closed) return false;
+      const previous = this.storage.get(event.sessionKey);
+      const changed = this.analytics.ingest(event, previous);
+      const next = reduceSession(previous, event);
+      this.storage.save(next);
+      this.storage.remember(next);
+      if (changed) {
+        this.revision++;
+        this.db
+          .prepare("UPDATE meta SET value=? WHERE key='revision'")
+          .run(this.revision);
+        this.publish({
+          type: "delta",
+          data: { revision: this.revision, session: next },
+        });
+      }
+      return changed;
+    }
     if (this.closed || this.storage.isPrunedReplay(event)) return false;
     let next: Session | undefined;
     let published = event;
@@ -107,6 +135,7 @@ export class AgentService {
       return true;
     })();
     if (!changed || !next) return false;
+    this.analytics.begin(event);
     this.storage.remember(next);
     this.revision++;
     this.publish({
@@ -220,6 +249,7 @@ export class AgentService {
   }
 
   cleanup(): void {
+    this.analytics.cleanup();
     this.storage.cleanup(this.now(), (removed) => {
       this.revision++;
       this.db
@@ -230,6 +260,25 @@ export class AgentService {
         data: { revision: this.revision, removedKeys: removed },
       });
     });
+  }
+
+  agents(query: AgentQuery = {}) {
+    return this.analytics.agents(query);
+  }
+  statistics(query: AnalyticsFilter = {}) {
+    const result = this.analytics.statistics(query);
+    if (
+      [...this.collectors.values()].some(
+        (c) => c.state !== "ready" || c.droppedEvents > 0,
+      )
+    ) {
+      result.coverage.partial = true;
+      result.coverage.reasons.push("Джерела недоступні або мають пропуски");
+    }
+    return result;
+  }
+  sampleActivity(): void {
+    if (!this.closed) this.analytics.sample();
   }
 
   close(): void {

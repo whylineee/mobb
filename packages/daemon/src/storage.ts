@@ -92,6 +92,12 @@ export class SessionStorage {
         this.db
           .prepare("UPDATE meta SET value=value+1 WHERE key='revision'")
           .run();
+      // A fresh signal for a parent does not reconfirm children from a previous run.
+      this.db.exec(`UPDATE sessions SET data=json_set(data,'$.subagents',json((
+        SELECT json_group_array(json(CASE WHEN json_extract(value,'$.lifecycle')='ended' THEN value
+          ELSE json_set(value,'$.lifecycle','unknown','$.activity','unknown') END))
+        FROM json_each(sessions.data,'$.subagents')
+      ))) WHERE json_array_length(data,'$.subagents')>0`);
       this.db.exec("INSERT OR IGNORE INTO migrations VALUES (2), (3)");
     })();
   }
@@ -144,6 +150,15 @@ export class SessionStorage {
           "SELECT data FROM sessions ORDER BY (lifecycle='open') DESC,last_observed DESC,key LIMIT ?",
         )
         .all(limit) as Row[]
+    ).map((row) => JSON.parse(row.data) as Session);
+  }
+  analyticsSessions(): Session[] {
+    return (
+      this.db
+        .prepare(
+          "SELECT json_remove(data,'$.task','$.activeTools','$.lastTool','$.completedToolIds') AS data FROM sessions",
+        )
+        .all() as Row[]
     ).map((row) => JSON.parse(row.data) as Session);
   }
   isPrunedReplay(event: AgentEvent): boolean {
