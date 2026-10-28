@@ -17,11 +17,20 @@ export async function daemonAvailable(config: RuntimeConfig): Promise<boolean> {
   if (response.status === 401)
     throw new Error("Daemon authentication failed. Check AGENTWATCH_HOME.");
   if (!response.ok) throw new Error(`Daemon unavailable (${response.status}).`);
-  const state = (await response.json()) as {
-    revision?: number;
-    sessions?: unknown[];
-  };
-  if (!Number.isSafeInteger(state.revision) || !Array.isArray(state.sessions))
+  let state: unknown;
+  try {
+    state = await response.json();
+  } catch {
+    throw new Error("Unexpected service on the AgentWatch port.");
+  }
+  if (
+    !state ||
+    typeof state !== "object" ||
+    !("revision" in state) ||
+    !("sessions" in state) ||
+    !Number.isSafeInteger(state.revision) ||
+    !Array.isArray(state.sessions)
+  )
     throw new Error("Unexpected service on the AgentWatch port.");
   return true;
 }

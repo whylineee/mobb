@@ -5,10 +5,35 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer } from "node:net";
+import { createServer as createHttpServer } from "node:http";
 import { loadConfig, writePrivateJson } from "./config.js";
 import { ensureDaemon, daemonAvailable, stopDaemon } from "./lifecycle.js";
 const cli = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 const roots: string[] = [];
+it("reports unrelated services with non-JSON or null responses clearly", async () => {
+  let body = "not an AgentWatch server";
+  const server = createHttpServer((_req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end(body);
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as { port: number }).port;
+  try {
+    const config = { port, uiToken: "test" } as Parameters<
+      typeof daemonAvailable
+    >[0];
+    await expect(daemonAvailable(config)).rejects.toThrow(
+      "Unexpected service on the AgentWatch port.",
+    );
+    body = "null";
+    await expect(daemonAvailable(config)).rejects.toThrow(
+      "Unexpected service on the AgentWatch port.",
+    );
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
 afterEach(() =>
   roots.splice(0).forEach((r) => rmSync(r, { recursive: true, force: true })),
 );
