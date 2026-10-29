@@ -1,7 +1,7 @@
 import { expect, it } from "vitest";
 import stringWidth from "string-width";
 import { fit, sparkline, renderDashboard, treeRows } from "./view.js";
-import { initialState, reduceUi } from "./state.js";
+import { applyPage, initialState, reduceUi, type UiState } from "./state.js";
 import type { AgentRow } from "@agentwatch/shared";
 const row = (key: string, parentKey?: string): AgentRow => ({
   key,
@@ -52,6 +52,117 @@ it("explains that already-open sessions may not be detected", () => {
   expect(frame.map((line) => line.text).join("\n")).toContain(
     "Відкриті раніше сесії можуть бути не виявлені",
   );
+});
+it("shows remaining Codex limits on both wide and compact screens", () => {
+  for (const columns of [80, 160]) {
+    const text = renderDashboard({
+      ...initialState(),
+      columns,
+      rows: 36,
+      codexLimits: {
+        state: "ready",
+        updatedAt: Date.now(),
+        fiveHour: { remainingPercent: 75, resetsAt: null },
+        weekly: { remainingPercent: 42, resetsAt: null },
+      },
+    })
+      .map((l) => l.text)
+      .join("\n");
+    expect(text).toContain("5г: 75%");
+    expect(text).toContain("7д: 42%");
+  }
+});
+it("shows unavailable Codex limits without inventing zero", () => {
+  const text = renderDashboard({
+    ...initialState(),
+    columns: 80,
+    rows: 24,
+    codexLimits: { state: "unavailable" },
+  })
+    .map((l) => l.text)
+    .join("\n");
+  expect(text).toContain("Codex ліміти: недоступні");
+});
+it("shows agents, selected details and both graphs in three columns on wide terminals", () => {
+  const selected = row("agent-a");
+  const frame = renderDashboard({
+    ...initialState(),
+    columns: 160,
+    rows: 36,
+    agents: [selected],
+    selectedKey: selected.key,
+  });
+  const text = frame.map((l) => l.text).join("\n");
+  expect(text).toContain("АГЕНТИ");
+  expect(text).toContain("ДЕТАЛІ");
+  expect(text).toContain("ГРАФІКИ");
+  expect(text).toContain("agent-a");
+  expect(text).toContain("Токени / 24h");
+  expect(text).toContain("Працюючі агенти / 24h");
+  expect(frame.every((l) => stringWidth(l.text) <= 160)).toBe(true);
+  const activityFirst = renderDashboard({
+    ...initialState(),
+    columns: 160,
+    rows: 36,
+    chart: 2,
+  })
+    .map((l) => l.text)
+    .join("\n");
+  expect(activityFirst.indexOf("2 Працюючі агенти")).toBeLessThan(
+    activityFirst.indexOf("1 Токени"),
+  );
+});
+it("opens and closes the charts view with the keyboard on narrow terminals", () => {
+  const state = reduceUi(initialState(), "g");
+  expect(
+    renderDashboard(state)
+      .map((l) => l.text)
+      .join("\n"),
+  ).toContain("ГРАФІКИ");
+  const restored = reduceUi(state, "escape");
+  expect(
+    renderDashboard(restored)
+      .map((l) => l.text)
+      .join("\n"),
+  ).toContain("АГЕНТИ");
+});
+it("keeps detail scrolling available when pressing g inside details", () => {
+  const selected = row("agent");
+  let state: UiState = {
+    ...initialState(),
+    agents: [selected],
+    selectedKey: selected.key,
+  };
+  state = reduceUi(state, "enter");
+  state = reduceUi(state, "g");
+  state = reduceUi(state, "down");
+  expect(state.detailScroll).toBe(1);
+  expect(state.chartsOpen).toBe(false);
+});
+it("shows the search input when search starts from charts", () => {
+  let state = reduceUi(initialState(), "g");
+  state = reduceUi(state, "/");
+  state = reduceUi(state, "text:agent");
+  expect(
+    renderDashboard(state)
+      .map((l) => l.text)
+      .join("\n"),
+  ).toContain("ПОШУК > agent");
+});
+it("returns to the list when a selected open session disappears", () => {
+  const selected = row("agent");
+  const state = reduceUi(
+    { ...initialState(), agents: [selected], selectedKey: selected.key },
+    "enter",
+  );
+  const refreshed = applyPage(state, {
+    agents: [],
+    ancestors: [],
+    total: 0,
+    nextCursor: null,
+  });
+  expect(refreshed.detailKey).toBeUndefined();
+  expect(refreshed.selectedKey).toBeUndefined();
 });
 it("collapses children without losing context and survives malformed cycles", () => {
   const rows = [row("parent"), row("child", "parent")];

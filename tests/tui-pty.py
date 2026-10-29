@@ -101,6 +101,11 @@ try:
     key(a, b"\x1b")
     wait_text(a, "Огляд")
     a[4] = b""
+    resize(a, 160, 36)
+    wait_text(a, "ДЕТАЛІ · ВИБРАНИЙ АГЕНТ")
+    wait_text(a, "ГРАФІКИ")
+    wait_text(a, "Synthetic PTY task")
+    a[4] = b""
     resize(a, 60, 18)
     wait_text(a, "80×24")
     a[4] = b""

@@ -5,6 +5,7 @@ import type {
   Statistics,
   TimeRange,
   EventPage,
+  CodexLimits,
 } from "@agentwatch/shared";
 import { treeRows } from "./view.js";
 
@@ -27,11 +28,14 @@ export type UiState = {
   dimension: "project" | "provider" | "model";
   focus: number;
   help: boolean;
+  chartsOpen: boolean;
   detailKey?: string;
   detail?: Session;
   events?: EventPage;
+  detailError?: string;
   detailScroll: number;
   statistics?: Statistics;
+  codexLimits: CodexLimits;
   online: boolean;
   error?: string;
   loading: boolean;
@@ -55,6 +59,8 @@ export const initialState = (): UiState => ({
   dimension: "project",
   focus: 0,
   help: false,
+  chartsOpen: false,
+  codexLimits: { state: "loading" },
   detailScroll: 0,
   online: false,
   loading: true,
@@ -77,6 +83,10 @@ export function applyPage(state: UiState, page: AgentPage): UiState {
     ...state,
     agents,
     ancestors: new Set(page.ancestors.map((r) => r.key)),
+    detailKey:
+      state.detailKey && agents.some((r) => r.key === state.detailKey)
+        ? state.detailKey
+        : undefined,
     total: page.total,
     nextCursor: page.nextCursor,
     selectedKey: visible.some((r) => r.row.key === state.selectedKey)
@@ -91,8 +101,8 @@ export function reduceUi(state: UiState, action: string): UiState {
       ...state,
       searching: false,
       help: false,
+      chartsOpen: false,
       detailKey: undefined,
-      detail: undefined,
       detailScroll: 0,
     };
   if (state.searching) {
@@ -136,13 +146,27 @@ export function reduceUi(state: UiState, action: string): UiState {
       };
     return state;
   }
+  if (action === "g") return { ...state, chartsOpen: !state.chartsOpen };
+  if (
+    state.chartsOpen &&
+    ["up", "down", "left", "right", "pageup", "pagedown", "enter"].includes(
+      action,
+    )
+  )
+    return state;
   if (["1", "2", "3"].includes(action))
-    return { ...state, chart: Number(action), focus: 1 };
+    return {
+      ...state,
+      chart: Number(action),
+      focus: 1,
+      chartsOpen: state.chartsOpen || state.columns < 140 || state.rows < 30,
+    };
   if (action === "tab") return { ...state, focus: 1 - state.focus };
   if (action.startsWith("/"))
     return {
       ...state,
       searching: true,
+      chartsOpen: false,
       search: (state.search + action.slice(1)).slice(0, 256),
       pageCount: 1,
     };
@@ -223,8 +247,6 @@ export function reduceUi(state: UiState, action: string): UiState {
     return {
       ...state,
       detailKey: current.key,
-      detail: undefined,
-      events: undefined,
       detailScroll: 0,
     };
   if (action === "left" && current) {

@@ -6,6 +6,7 @@ import type {
   EventPage,
   Session,
   Statistics,
+  CodexLimits,
 } from "@agentwatch/shared";
 export type ConnectionOptions = { baseUrl: string; token: string };
 export class TuiClient {
@@ -24,7 +25,11 @@ export class TuiClient {
     query: AgentQuery,
     pages: number,
     signal: AbortSignal,
-  ): Promise<{ statistics: Statistics; page: AgentPage }> {
+  ): Promise<{
+    statistics: Statistics;
+    page: AgentPage;
+    codexLimits: CodexLimits;
+  }> {
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(query))
       if (v !== undefined && v !== "") params.set(k, String(v));
@@ -63,8 +68,15 @@ export class TuiClient {
       ];
       return page;
     };
-    const [stats, page] = await Promise.all([statistics, agents()]);
-    return { statistics: stats, page };
+    const limits = this.request<CodexLimits>("/api/codex-limits", signal).catch(
+      (): CodexLimits => ({ state: "unavailable" }),
+    );
+    const [stats, page, codexLimits] = await Promise.all([
+      statistics,
+      agents(),
+      limits,
+    ]);
+    return { statistics: stats, page, codexLimits };
   }
   async details(key: string, signal: AbortSignal) {
     const path = `/api/sessions/${encodeURIComponent(key)}`;

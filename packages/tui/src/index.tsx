@@ -39,7 +39,7 @@ function Dashboard({ options }: { options: Options }) {
                           : key.backspace || key.delete
                             ? "backspace"
                             : input;
-    setState((current) => reduceUi(current, action));
+    setState((current) => reduceUi({ ...current, columns, rows }, action));
   });
   useEffect(() => {
     if (state.exit) exit();
@@ -70,6 +70,7 @@ function Dashboard({ options }: { options: Options }) {
           setState((current) => ({
             ...applyPage(current, result.page),
             statistics: result.statistics,
+            codexLimits: result.codexLimits,
             online: true,
             error: undefined,
             loading: false,
@@ -111,9 +112,10 @@ function Dashboard({ options }: { options: Options }) {
     state.pageCount,
   ]);
   useEffect(() => {
-    if (!state.detailKey) return;
-    const selected = state.agents.find((r) => r.key === state.detailKey);
+    const key = state.detailKey ?? state.selectedKey;
+    const selected = state.agents.find((r) => r.key === key);
     if (!selected?.sessionKey) return;
+    setState((current) => ({ ...current, detailError: undefined }));
     const controller = new AbortController();
     let busy = false;
     const refresh = async () => {
@@ -129,12 +131,14 @@ function Dashboard({ options }: { options: Options }) {
             ...current,
             detail: result.session,
             events: result.events,
+            detailError: undefined,
           }));
       } catch (error) {
         if (!controller.signal.aborted)
           setState((current) => ({
             ...current,
-            error: error instanceof Error ? error.message : "Деталі недоступні",
+            detailError:
+              error instanceof Error ? error.message : "Деталі недоступні",
           }));
       } finally {
         busy = false;
@@ -146,7 +150,13 @@ function Dashboard({ options }: { options: Options }) {
       controller.abort();
       clearInterval(timer);
     };
-  }, [client, state.detailKey]);
+  }, [
+    client,
+    state.detailKey,
+    state.selectedKey,
+    state.agents.find((r) => r.key === (state.detailKey ?? state.selectedKey))
+      ?.sessionKey,
+  ]);
   const frame = renderDashboard({ ...state, columns, rows });
   return (
     <Box flexDirection="column" height={rows} width={columns}>
@@ -158,7 +168,18 @@ function Dashboard({ options }: { options: Options }) {
           bold={line.bold}
           inverse={line.inverse}
         >
-          {line.text}
+          {line.segments
+            ? line.segments.map((segment, i) => (
+                <Text
+                  key={i}
+                  color={state.monochrome ? undefined : segment.color}
+                  bold={segment.bold}
+                  inverse={segment.inverse}
+                >
+                  {segment.text}
+                </Text>
+              ))
+            : line.text}
         </Text>
       ))}
     </Box>
