@@ -9,6 +9,7 @@ import { createApp } from "./server.js";
 import { installHooks, uninstallHooks } from "./hooks.js";
 import { FileCollectors } from "./collectors/files.js";
 import { ProcessCollector } from "./collectors/processes.js";
+import { CodexLimitsCollector } from "./collectors/codex-limits.js";
 import { ensureDaemon, stopDaemon } from "./lifecycle.js";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
@@ -108,7 +109,10 @@ try {
     writeFileSync(lock, String(process.pid), { flag: "wx", mode: 0o600 });
     const service = new AgentService({ dbPath: join(home, "state.sqlite") });
     const files = new FileCollectors(service, config, home),
-      processes = new ProcessCollector(service);
+      processes = new ProcessCollector(service),
+      limits = new CodexLimitsCollector(config.codexHome, (value) =>
+        service.setCodexLimits(value),
+      );
     const app = createApp({
       config,
       service,
@@ -141,6 +145,7 @@ try {
         );
         files.start();
         processes.start();
+        limits.start();
       },
     );
     service.cleanup();
@@ -156,6 +161,7 @@ try {
       clearInterval(cleanup);
       clearInterval(samples);
       processes.close();
+      limits.close();
       await files.close();
       if ("closeAllConnections" in server) server.closeAllConnections();
       server.close();

@@ -1,4 +1,10 @@
 export type TimeRange = "1h" | "24h" | "7d";
+export type CodexLimits = {
+  state: "loading" | "ready" | "unavailable";
+  updatedAt?: number;
+  fiveHour?: { remainingPercent: number; resetsAt: number | null } | null;
+  weekly?: { remainingPercent: number; resetsAt: number | null } | null;
+};
 export type TokenTotals = {
   input: number | null;
   output: number | null;

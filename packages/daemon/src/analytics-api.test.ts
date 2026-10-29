@@ -33,6 +33,10 @@ it("authenticates and validates analytics filters and pagination", async () => {
   ])
     expect((await request(path)).status).toBe(400);
   expect((await request("/api/statistics?range=1h")).status).toBe(200);
+  expect((await request("/api/codex-limits", false)).status).toBe(401);
+  expect(await (await request("/api/codex-limits")).json()).toEqual({
+    state: "loading",
+  });
 });
 it("returns ancestor context for a filtered child and unfiltered global counts", async () => {
   const s = service();

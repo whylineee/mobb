@@ -63,6 +63,7 @@ export function createApp(options: {
     }),
   );
   app.get("/api/state", (c) => c.json(service.snapshot()));
+  app.get("/api/codex-limits", (c) => c.json(service.codexLimits()));
   const analyticsQuery = (query: Record<string, string>): AgentQuery | null => {
     const { range, provider, project, search, status, cursor, limit } = query;
     if (

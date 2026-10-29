@@ -1,6 +1,7 @@
 import { z } from "zod";
 export type {
   TimeRange,
+  CodexLimits,
   TokenTotals,
   AgentRow,
   AnalyticsFilter,

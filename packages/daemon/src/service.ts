@@ -9,6 +9,7 @@ import {
   type ProcessBinding,
   type AnalyticsFilter,
   type AgentQuery,
+  type CodexLimits,
 } from "@agentwatch/shared";
 import { reduceSession } from "./telemetry/reducer.js";
 import { MAX_OVERVIEW_SESSIONS, summarizeSession } from "./summary.js";
@@ -28,6 +29,7 @@ export class AgentService {
   private closed = false;
   private now: () => number;
   private analytics: Analytics;
+  private limits: CodexLimits = { state: "loading" };
 
   constructor(options: {
     dbPath: string;
@@ -264,6 +266,12 @@ export class AgentService {
 
   agents(query: AgentQuery = {}) {
     return this.analytics.agents(query);
+  }
+  codexLimits(): CodexLimits {
+    return structuredClone(this.limits);
+  }
+  setCodexLimits(limits: CodexLimits): void {
+    if (!this.closed) this.limits = limits;
   }
   statistics(query: AnalyticsFilter = {}) {
     const result = this.analytics.statistics(query);
