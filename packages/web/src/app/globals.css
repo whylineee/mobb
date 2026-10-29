@@ -2617,3 +2617,104 @@ kbd {
     bottom: 160px;
   }
 }
+
+/* Compact scene annotations remain clickable without intercepting camera input. */
+.office-screen .robot-label {
+  width: auto;
+  height: auto;
+  min-height: 30px;
+  max-width: 150px;
+  padding: 4px 7px;
+  gap: 5px;
+  border-radius: 8px;
+}
+.office-screen .robot-label > .robot-dot {
+  position: static;
+  width: 6px;
+  height: 6px;
+}
+.office-screen .robot-caption {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+.office-screen .robot-caption strong,
+.office-screen .robot-caption small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 105px;
+}
+.office-screen .robot-caption strong {
+  font-size: 10px;
+}
+.office-screen .robot-caption small {
+  font-size: 9px;
+  font-family: inherit;
+  color: #d4e2c5;
+}
+.office-screen .robot-attention {
+  border-color: #ffd27c;
+  background: #674525;
+  animation: attention-pulse 2s ease-in-out infinite;
+}
+.office-project-zone {
+  display: block;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: #e3d3aee8;
+  color: #38483b;
+  font-size: 10px;
+  font-weight: 700;
+  pointer-events: none;
+}
+.office-rail button {
+  position: relative;
+}
+.attention-count {
+  position: absolute;
+  right: 1px;
+  top: 1px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 3px;
+  border-radius: 10px;
+  background: #b14e2e;
+  color: white;
+  font-size: 10px;
+  line-height: 17px;
+  font-weight: 700;
+}
+@keyframes attention-pulse {
+  50% {
+    box-shadow:
+      0 0 0 5px #f7be6a55,
+      0 0 16px #f7be6a99;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .office-screen .robot-attention {
+    animation: none;
+  }
+}
+.office-screen .office-dense .robot-label {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  gap: 0;
+  border-radius: 50%;
+}
+.office-screen .office-dense .robot-caption {
+  display: none;
+}
+.office-screen .office-dense .robot-label > .robot-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+}

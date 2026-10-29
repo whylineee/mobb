@@ -273,6 +273,15 @@ export default function Dashboard() {
           onClick={(e) => openLeft("tasks", e.currentTarget)}
         >
           <Columns3 size={20} />
+          {visible.filter((session) => session.requiresAttention).length >
+            0 && (
+            <span
+              className="attention-count"
+              aria-label={`${visible.filter((session) => session.requiresAttention).length} потребують уваги`}
+            >
+              {visible.filter((session) => session.requiresAttention).length}
+            </span>
+          )}
         </button>
       </nav>
       <nav className="office-rail office-rail-right" aria-label="Моніторинг">

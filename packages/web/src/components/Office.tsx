@@ -7,8 +7,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type RefObject,
 } from "react";
 import { Canvas } from "@react-three/fiber";
+import { Html, Line } from "@react-three/drei";
 import { BoxGeometry } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { Focus, Minus, Plus } from "lucide-react";
@@ -16,6 +18,7 @@ import type { Session } from "@agentwatch/shared";
 import { MascotInstances } from "./AgentMascot";
 import { SceneFrames } from "./SceneFrames";
 import { sameSceneSessions } from "../lib/scene-sessions";
+import { officeLayout } from "../lib/office-layout";
 import { HOME, type SceneInsets } from "../lib/office-camera";
 import {
   SolidInstances,
@@ -74,46 +77,17 @@ const Office = memo(
       },
       [geometry, softGeometry],
     );
-    const seats = useRef(new Map<string, Seat>()),
-      pointer = useRef({ x: 0, y: 0, dragged: false });
-    const allKeys = props.allSessions.map((s) => s.key).join("|");
-    useMemo(() => {
-      const keys = new Set(props.allSessions.map((s) => s.key));
-      for (const key of seats.current.keys())
-        if (!keys.has(key)) seats.current.delete(key);
-      const taken = new Set(
-        [...seats.current.values()].map((p) => `${p[0]}:${p[2]}`),
-      );
-      for (const session of props.allSessions) {
-        if (seats.current.has(session.key)) continue;
-        for (let i = 0; ; i++) {
-          const seat: Seat = [
-            -5.2 + (i % 4) * 3.4,
-            0,
-            -5.9 + Math.floor(i / 4) * 3.25,
-          ];
-          const key = `${seat[0]}:${seat[2]}`;
-          if (!taken.has(key)) {
-            seats.current.set(session.key, seat);
-            taken.add(key);
-            break;
-          }
-        }
-      }
-    }, [allKeys]);
+    const pointer = useRef({ x: 0, y: 0, dragged: false });
+    const { seats, zones, links, rows } = useMemo(
+      () => officeLayout(props.sessions),
+      [props.sessions],
+    );
     const occupied = new Map(
       props.sessions.map((s) => {
-        const seat = seats.current.get(s.key) ?? [0, 0, 0];
+        const seat = seats.get(s.key)!;
         return [`${seat[0]}:${seat[2]}`, s] as const;
       }),
     );
-    const maxRow = Math.max(
-      4,
-      ...[...seats.current.values()].map(
-        (seat) => Math.round((seat[2] + 5.9) / 3.25) + 1,
-      ),
-    );
-    const rows = Math.max(4, maxRow);
     const furniture = Array.from({ length: rows * 4 }, (_, i) => {
       const seat: Seat = [
         -5.2 + (i % 4) * 3.4,
@@ -127,7 +101,7 @@ const Office = memo(
     return (
       <SceneBoundary onFallback={props.onFallback}>
         <div
-          className="office-canvas"
+          className={`office-canvas ${props.sessions.length > 8 ? "office-dense" : ""}`}
           data-testid="office-canvas"
           onPointerDown={(e) => {
             pointer.current = { x: e.clientX, y: e.clientY, dragged: false };
@@ -158,13 +132,13 @@ const Office = memo(
               if (!pointer.current.dragged) props.onSelect(null);
             }}
           >
-            <color attach="background" args={["#8c9a7b"]} />
-            <hemisphereLight args={["#e4ecdf", "#8d826c", 2]} />
-            <ambientLight intensity={0.45} color="#e5e8d9" />
+            <color attach="background" args={["#263a49"]} />
+            <hemisphereLight args={["#d1eaf1", "#47566a", 2]} />
+            <ambientLight intensity={0.45} color="#d6e9f4" />
             <directionalLight
               position={[3, 18, -5]}
               intensity={3.2}
-              color="#ffdfb2"
+              color="#d9efff"
               castShadow={shadows}
               shadow-mapSize={[1024, 1024]}
               shadow-camera-left={-15}
@@ -176,7 +150,7 @@ const Office = memo(
             <directionalLight
               position={[-8, 8, -6]}
               intensity={0.6}
-              color="#a4d3c4"
+              color="#63b9d4"
             />
             <Suspense fallback={null}>
               <SolidInstances
@@ -209,6 +183,33 @@ const Office = memo(
                         <meshLambertMaterial />
                         <MascotInstances shadows={shadows}>
                           <Room rows={rows} shadows={shadows} />
+                          {zones.map((zone) => (
+                            <Html
+                              key={zone.key}
+                              portal={portal as RefObject<HTMLElement>}
+                              position={[
+                                zone.seat[0],
+                                0.15,
+                                zone.seat[2] - 1.5,
+                              ]}
+                              center
+                            >
+                              <span className="office-project-zone">
+                                {zone.project || "Проєкт невідомий"}
+                              </span>
+                            </Html>
+                          ))}
+                          {links.map((link) => (
+                            <Line
+                              key={link.key}
+                              points={[
+                                [link.parent[0], 0.12, link.parent[2]],
+                                [link.child[0], 0.12, link.child[2]],
+                              ]}
+                              color="#f4d793"
+                              lineWidth={2}
+                            />
+                          ))}
                           {furniture.map(({ seat, session }, i) => (
                             <Desk
                               key={i}
@@ -232,9 +233,7 @@ const Office = memo(
             </Suspense>
             <CameraRig
               focus={
-                props.selectedKey
-                  ? seats.current.get(props.selectedKey)
-                  : undefined
+                props.selectedKey ? seats.get(props.selectedKey) : undefined
               }
               action={action}
               reduced={props.reducedMotion}
@@ -282,10 +281,7 @@ const Office = memo(
     previous.onSelect === next.onSelect &&
     previous.onFallback === next.onFallback &&
     sameSceneSessions(previous.sessions, next.sessions) &&
-    previous.allSessions.length === next.allSessions.length &&
-    previous.allSessions.every(
-      (session, index) => session.key === next.allSessions[index]!.key,
-    ),
+    sameSceneSessions(previous.allSessions, next.allSessions),
 );
 
 export default Office;

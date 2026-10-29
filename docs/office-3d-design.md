@@ -1,7 +1,12 @@
 # Fixed-angle office and live monitoring panels
 
-The existing furnished cutaway office, palette, seat allocation and
-room expansion remain the primary surface. Linear lights use visible wall
+The cutaway office uses a raised central work deck, server racks, a glass collaboration pod, a lounge platform and a console wing. Decorative wall displays do not represent live telemetry. Room expansion remains tied to the seat grid.
+Visible sessions are arranged in deterministic project groups; project directory
+distinguishes names when available. Explicit parent-child relationships between
+visible sessions are drawn as lines; ambiguous or ended links are omitted.
+Compact labels show the project, current action and known turn duration; above
+eight agents they collapse to markers to keep the scene legible. Confirmed
+attention adds a pulse and a task-board count, respecting reduced motion. Linear lights use visible wall
 cantilevers, crossbars and short hangers, with no ceiling covering the room.
 
 The orthographic camera keeps the existing isometric angle at every viewport.
@@ -36,8 +41,8 @@ disclosed; counts describe the loaded overview, not a global historical total.
 No public API, Session type, database, dependency or agent-control capability is
 added. No task editing, history analytics, token counts or cost estimates.
 
-Only confirmed live work and attention create robots. Idle, ended, historical
-and stale sessions do not. An already-open detail drawer survives session end.
+Confirmed fresh open sessions create robots, including idle sessions between turns.
+Ended, historically unconfirmed and stale sessions do not. An already-open detail drawer survives session end.
 The accessible agent list remains the WebGL fallback. Existing authentication,
 text redaction, bounded summaries, full-detail loading, SSE resync, native pixel
 density and adaptive geometry/shadows remain in place.

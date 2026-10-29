@@ -251,9 +251,5 @@ export function sessionStatus(session: Session): Activity | "ended" {
 }
 
 export function officeVisible(session: Session): boolean {
-  return (
-    session.lifecycle === "open" &&
-    session.freshness === "fresh" &&
-    (session.activity === "working" || session.activity === "waiting")
-  );
+  return session.lifecycle === "open" && session.freshness === "fresh";
 }

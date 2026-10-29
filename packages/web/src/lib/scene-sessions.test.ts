@@ -42,6 +42,11 @@ it("redraws for status, appearance, tooltip and seat membership changes", () => 
     { project: "new" },
     { task: { text: "new prompt", source: "hook", updatedAt: 2 } },
     { freshness: "stale" },
+    { requiresAttention: false },
+    { parentSessionKey: "codex:parent" },
+    { cwd: "/new" },
+    { turnStartedAt: 100 },
+    { activeTools: [{ id: "1", name: "Read", startedAt: 1 }] },
     { key: "codex:two" },
   ]) {
     expect(

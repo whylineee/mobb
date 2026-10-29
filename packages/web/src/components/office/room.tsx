@@ -1,7 +1,8 @@
 "use client";
 import { RoundedBox } from "@react-three/drei";
 import { Box } from "./primitives";
-import { Plant, Chair, Glass, Sofa } from "./furniture";
+import { Chair, Glass } from "./furniture";
+
 export function Room({ rows, shadows }: { rows: number; shadows: boolean }) {
   const depth = Math.max(20, rows * 3.25 + 3);
   const back = -depth / 2;
@@ -14,9 +15,10 @@ export function Room({ rows, shadows }: { rows: number; shadows: boolean }) {
           receiveShadow
         >
           <planeGeometry args={[200, 200]} />
-          <meshLambertMaterial color="#65766c" />
+          <meshLambertMaterial color="#111e2b" />
         </mesh>
       )}
+      {/* Raised platform, with a central working deck and surrounding walkways. */}
       <RoundedBox
         args={[26, 0.6, depth]}
         radius={0.14}
@@ -24,379 +26,287 @@ export function Room({ rows, shadows }: { rows: number; shadows: boolean }) {
         position={[0, -0.32, 0]}
         receiveShadow
       >
-        <meshStandardMaterial color="#b1b4a2" roughness={0.9} />
+        <meshStandardMaterial color="#293a49" roughness={0.82} />
       </RoundedBox>
       <Box
-        position={[0, 0.015, 0]}
+        position={[0, 0.01, 0]}
         size={[25.7, 0.05, depth - 0.3]}
-        color="#c5aa82"
-      />
-      {Array.from({ length: Math.ceil(depth / 0.65) }, (_, i) => (
-        <group key={i}>
-          <Box
-            position={[0, 0.045, back + 0.33 + i * 0.65]}
-            size={[25.6, 0.008, 0.018]}
-            color="#ac9472"
-          />
-          {[-8, -1.5, 5, 11.5].map((x) => (
-            <Box
-              key={x}
-              position={[x + (i % 2 ? 1.6 : 0), 0.047, back + 0.65 + i * 0.65]}
-              size={[0.015, 0.008, 0.62]}
-              color="#b29a77"
-            />
-          ))}
-        </group>
-      ))}
-      {/* Two full-height walls leave the front of the room open to the camera. */}
-      <Box
-        position={[0, 1.9, back + 0.12]}
-        size={[26, 3.8, 0.24]}
-        color="#d5d8c9"
+        color="#243746"
       />
       <Box
-        position={[-12.88, 1.9, 0]}
-        size={[0.24, 3.8, depth]}
-        color="#abb9a7"
-      />
-      <Box
-        position={[0, 0.18, back + 0.28]}
-        size={[25.7, 0.25, 0.09]}
-        color="#768476"
-      />
-      <Box
-        position={[-12.7, 0.18, 0]}
-        size={[0.08, 0.25, depth - 0.3]}
-        color="#768476"
-      />
-      <Box
-        position={[0, 3.82, back + 0.12]}
-        size={[26, 0.1, 0.32]}
-        color="#e0dfcd"
-      />
-      <Box
-        position={[-12.88, 3.82, 0]}
-        size={[0.32, 0.1, depth]}
-        color="#c4cbb7"
-      />
-      {[-8.8, -2.9, 3, 8.9].map((x) => (
-        <group key={x} position={[x, 2.25, back + 0.3]}>
-          <Box position={[0, 0, 0]} size={[4.7, 2.25, 0.16]} color="#455b53" />
-          <Box
-            position={[0, 0, 0.1]}
-            size={[4.44, 2.01, 0.035]}
-            color="#b5cfc0"
-            emissive="#b4d2c4"
-            emissiveIntensity={0.3}
-            roughness={0.35}
-          />
-          {[-0.78, 0.78].map((dx) => (
-            <Box
-              key={dx}
-              position={[dx, 0, 0.15]}
-              size={[0.07, 2.1, 0.06]}
-              color="#455b53"
-            />
-          ))}
-          <Box
-            position={[0, -0.2, 0.15]}
-            size={[4.5, 0.06, 0.06]}
-            color="#455b53"
-          />
-          <Box
-            position={[0, -1.18, 0.13]}
-            size={[4.9, 0.11, 0.47]}
-            color="#dcd9bd"
-          />
-        </group>
-      ))}
-      {/* Woven carpet anchors the work area. */}
-      <Box
-        position={[-0.2, 0.065, 0.35]}
-        size={[14.4, 0.04, depth - 3]}
-        color="#899681"
+        position={[0, 0.055, 0]}
+        size={[14.5, 0.07, depth - 1.1]}
+        color="#354c5b"
         rounded
       />
-      <Box
-        position={[-0.2, 0.09, 0.35]}
-        size={[14, 0.012, depth - 3.4]}
-        color="#96a08a"
-      />
-      {[-6.9, 6.5].map((x) => (
+      {[-7.45, 7.45].map((x) => (
+        <group key={x}>
+          <Box
+            position={[x, 0.065, 0]}
+            size={[0.12, 0.05, depth - 0.6]}
+            color="#142938"
+          />
+          <Box
+            position={[x, 0.095, 0]}
+            size={[0.035, 0.014, depth - 0.8]}
+            color="#60d9e6"
+            emissive="#60d9e6"
+          />
+        </group>
+      ))}
+      {Array.from({ length: Math.floor((depth - 1) / 2) }, (_, i) => (
         <Box
-          key={x}
-          position={[x, 0.1, 0.35]}
-          size={[0.04, 0.01, depth - 3.5]}
-          color="#b0b59c"
+          key={i}
+          position={[0, 0.095, back + 1 + i * 2]}
+          size={[14.3, 0.008, 0.018]}
+          color="#496371"
         />
       ))}
-      {/* Glass meeting room on the right, with a door-sized opening. */}
-      <group position={[9.6, 0, back + 4.4]}>
-        <Box position={[0, 0.07, 0]} size={[5.5, 0.04, 6.6]} color="#758b80" />
-        <Glass position={[-2.7, 1.6, -0.8]} size={[0.055, 3.2, 4.9]} />
-        <Glass position={[0, 1.6, 3.25]} size={[5.4, 3.2, 0.055]} />
-        {[-3.2, -0.8, 1.6].map((z) => (
+
+      {/* Two low structural walls keep the open isometric view unobstructed. */}
+      <Box
+        position={[0, 1.7, back + 0.12]}
+        size={[26, 3.4, 0.24]}
+        color="#253e50"
+      />
+      <Box
+        position={[-12.88, 1.7, 0]}
+        size={[0.24, 3.4, depth]}
+        color="#1c3446"
+      />
+      <Box
+        position={[0, 3.42, back + 0.12]}
+        size={[26, 0.08, 0.3]}
+        color="#7197a8"
+      />
+      <Box
+        position={[-12.88, 3.42, 0]}
+        size={[0.3, 0.08, depth]}
+        color="#7197a8"
+      />
+      <Box
+        position={[0, 3.27, back + 0.27]}
+        size={[25.3, 0.035, 0.035]}
+        color="#83f0f0"
+        emissive="#83f0f0"
+      />
+
+      {/* Back-wall mission displays: graphic panels, not live telemetry. */}
+      {[-4.8, 0, 4.8].map((x, index) => (
+        <group key={x} position={[x, 1.95, back + 0.3]}>
           <Box
-            key={z}
-            position={[-2.7, 1.6, z]}
-            size={[0.065, 3.2, 0.065]}
-            color="#495e54"
+            position={[0, 0, 0]}
+            size={[4.35, 2.25, 0.13]}
+            color="#101f2c"
+            rounded
           />
-        ))}
-        {[-2.7, 0, 2.7].map((x) => (
           <Box
-            key={x}
-            position={[x, 1.6, 3.25]}
-            size={[0.065, 3.2, 0.065]}
-            color="#495e54"
+            position={[0, 0, 0.08]}
+            size={[4.12, 2.01, 0.025]}
+            color="#183c50"
+            emissive="#183c50"
           />
-        ))}
+          <Box
+            position={[-1.65, 0.68, 0.1]}
+            size={[0.55, 0.045, 0.02]}
+            color="#65e2e6"
+            emissive="#65e2e6"
+          />
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Box
+              key={i}
+              position={[
+                -1.55 + i * 0.77,
+                -0.4 + ((i + index) % 3) * 0.13,
+                0.1,
+              ]}
+              size={[0.45, 0.45 + ((i + index) % 3) * 0.26, 0.02]}
+              color={i === 3 ? "#79e3df" : "#347c96"}
+              emissive={i === 3 ? "#79e3df" : "#347c96"}
+            />
+          ))}
+          <Box
+            position={[0, -0.83, 0.1]}
+            size={[3.5, 0.025, 0.02]}
+            color="#72c8d5"
+            emissive="#72c8d5"
+          />
+        </group>
+      ))}
+
+      {/* Server wall: stacked racks with small indicator lights. */}
+      <group position={[-10, 0, back + 2.2]}>
         <Box
-          position={[-2.7, 3.22, -0.8]}
-          size={[0.09, 0.09, 4.95]}
-          color="#495e54"
-        />
-        <Box
-          position={[0, 3.22, 3.25]}
-          size={[5.5, 0.09, 0.09]}
-          color="#495e54"
-        />
-        <Box
-          position={[0, 1.15, 0]}
-          size={[2.25, 0.18, 3.9]}
-          color="#d6c3a0"
+          position={[0, 1.43, 0]}
+          size={[4.3, 2.8, 1.15]}
+          color="#152b39"
           rounded
         />
-        {[-1.25, 1.25].map((z) => (
+        {[-1.35, 0, 1.35].map((x) => (
+          <group key={x}>
+            <Box
+              position={[x, 1.45, 0.6]}
+              size={[1.18, 2.48, 0.05]}
+              color="#304a59"
+            />
+            {[0, 1, 2, 3, 4].map((i) => (
+              <group key={i}>
+                <Box
+                  position={[x, 0.53 + i * 0.45, 0.64]}
+                  size={[1.02, 0.32, 0.03]}
+                  color="#102532"
+                />
+                <Box
+                  position={[x + 0.36, 0.53 + i * 0.45, 0.67]}
+                  size={[0.08, 0.06, 0.02]}
+                  color={i === 2 ? "#f2b26d" : "#62d8ce"}
+                  emissive={i === 2 ? "#f2b26d" : "#62d8ce"}
+                />
+              </group>
+            ))}
+          </group>
+        ))}
+      </group>
+
+      {/* Enclosed collaboration pod, transparent towards the camera. */}
+      <group position={[9.65, 0, back + 4.2]}>
+        <Box
+          position={[0, 0.08, 0]}
+          size={[5.35, 0.13, 6.4]}
+          color="#47616d"
+          rounded
+        />
+        <Glass position={[-2.6, 1.45, -0.45]} size={[0.06, 2.8, 5.4]} />
+        <Glass position={[0, 1.45, 3.15]} size={[5.2, 2.8, 0.06]} />
+        {[-2.6, 2.6].map((x) => (
           <Box
-            key={z}
-            position={[0, 0.55, z]}
-            size={[1.4, 1.1, 0.15]}
-            color="#475a4d"
+            key={x}
+            position={[x, 1.5, 3.15]}
+            size={[0.09, 3, 0.09]}
+            color="#7798a3"
           />
         ))}
-        {[-1.15, 1.15].flatMap((z) =>
+        <Box
+          position={[0, 2.95, 3.15]}
+          size={[5.25, 0.09, 0.09]}
+          color="#77e4e9"
+          emissive="#77e4e9"
+        />
+        <Box
+          position={[0, 1.07, 0]}
+          size={[2.25, 0.16, 3.2]}
+          color="#96abb0"
+          rounded
+        />
+        <Box position={[0, 0.55, 0]} size={[0.28, 1.05, 1.8]} color="#334d59" />
+        {[-1, 1].flatMap((z) =>
           [-1, 1].map((side) => (
             <Chair
               key={`${z}:${side}`}
-              position={[side * 1.75, 0, z]}
+              position={[side * 1.65, 0.15, z]}
               rotation={(side * Math.PI) / 2}
-              color="#596e67"
+              color="#537582"
             />
           )),
         )}
         <Box
-          position={[0, 1.26, -0.2]}
-          size={[0.75, 0.04, 0.52]}
-          color="#526c65"
+          position={[0, 1.17, 0]}
+          size={[0.8, 0.05, 1.1]}
+          color="#3ca9ba"
+          emissive="#3ca9ba"
           rounded
         />
-        <Box
-          position={[0.5, 1.29, 0.8]}
-          size={[0.28, 0.1, 0.36]}
-          color="#d1aa73"
-        />
-        <Plant position={[1.95, 0.08, -2.4]} scale={1.3} />
       </group>
-      {/* Kitchenette and open shelves on the left. */}
-      <group position={[-10.1, 0, back + 2.4]}>
-        <Box position={[0, 0.63, 0]} size={[4.2, 1.25, 1.55]} color="#607c6a" />
-        {[-1.4, 0, 1.4].map((x) => (
-          <group key={x}>
-            <Box
-              position={[x, 0.63, 0.79]}
-              size={[1.33, 1.12, 0.05]}
-              color="#80917a"
-            />
-            <Box
-              position={[x, 0.94, 0.84]}
-              size={[0.32, 0.04, 0.06]}
-              color="#c5c6ad"
-            />
-          </group>
-        ))}
-        <Box position={[0, 1.3, 0]} size={[4.35, 0.14, 1.65]} color="#d8ceb0" />
+
+      {/* Forward lounge is an open stepped platform with integrated seating. */}
+      <group position={[-10, 0, 5]}>
         <Box
-          position={[-0.95, 1.69, -0.18]}
-          size={[0.8, 0.67, 0.65]}
-          color="#35463f"
+          position={[0, 0.1, 0]}
+          size={[5.1, 0.2, 5.4]}
+          color="#354d5b"
           rounded
         />
         <Box
-          position={[-0.95, 1.78, 0.16]}
-          size={[0.55, 0.3, 0.025]}
-          color="#94b09c"
-          emissive="#94b09c"
-          emissiveIntensity={0.3}
-        />
-        <Box
-          position={[-0.95, 1.4, 0.35]}
-          size={[0.68, 0.07, 0.4]}
-          color="#55655a"
-        />
-        <Box
-          position={[-0.95, 1.53, 0.29]}
-          size={[0.18, 0.2, 0.18]}
-          color="#d7c2a0"
+          position={[-1.45, 0.55, 0]}
+          size={[1.05, 0.65, 3.7]}
+          color="#496b78"
           rounded
         />
         <Box
-          position={[0.8, 1.39, 0]}
-          size={[1.2, 0.05, 0.85]}
-          color="#89998a"
+          position={[-1.95, 1, 0]}
+          size={[0.18, 1.1, 3.7]}
+          color="#72929b"
           rounded
         />
         <Box
-          position={[0.8, 1.69, -0.28]}
-          size={[0.06, 0.58, 0.06]}
-          color="#53675b"
+          position={[0.45, 0.55, 0]}
+          size={[1.65, 0.12, 2.1]}
+          color="#91a9ae"
+          rounded
         />
         <Box
-          position={[0.8, 1.97, -0.1]}
-          size={[0.06, 0.06, 0.42]}
-          color="#53675b"
+          position={[0.45, 0.31, 0]}
+          size={[0.2, 0.5, 0.2]}
+          color="#385666"
         />
         <Box
-          position={[0, 2.7, -0.63]}
-          size={[4.5, 0.12, 0.75]}
-          color="#a88d66"
+          position={[1.7, 0.54, 0]}
+          size={[0.7, 0.65, 2.4]}
+          color="#496b78"
+          rounded
         />
-        {[-1.8, -1.55, -1.3, 0.7, 0.95].map((x, i) => (
+      </group>
+
+      {/* A freestanding console and light columns make the opposite wing distinct. */}
+      <group position={[9.8, 0, 5.3]}>
+        <Box
+          position={[0, 0.55, 1.3]}
+          size={[4.2, 1.1, 1.3]}
+          color="#263f4e"
+          rounded
+        />
+        <Box
+          position={[0, 1.15, 1.3]}
+          size={[4.35, 0.12, 1.4]}
+          color="#7795a0"
+          rounded
+        />
+        <Box
+          position={[0, 1.25, 1.3]}
+          size={[2.8, 0.035, 0.65]}
+          color="#50b7c8"
+          emissive="#50b7c8"
+        />
+        {[-1.8, 1.8].map((x) => (
           <Box
             key={x}
-            position={[x, 2.99, -0.55]}
-            size={[0.17, 0.48 + (i % 2) * 0.13, 0.38]}
-            color={["#8e9f8c", "#beaa80", "#6d8580"][i % 3]}
+            position={[x, 1.35, -1.4]}
+            size={[0.15, 2.7, 0.15]}
+            color="#6cd6de"
+            emissive="#6cd6de"
           />
         ))}
-        <Plant position={[1.6, 2.76, -0.5]} scale={0.45} />
       </group>
-      {/* A lived-in lounge, separate from the working floor. */}
-      <group position={[-9.8, 0, 4.7]}>
-        <Box
-          position={[0, 0.07, 0.9]}
-          size={[5.2, 0.035, 6.3]}
-          color="#b7b79c"
-          rounded
-        />
-        <Sofa position={[-1.25, 0, 0.6]} rotation={Math.PI / 2} />
-        <Sofa position={[0.2, 0, -1.8]} />
-        <RoundedBox
-          args={[1.8, 0.15, 2.3]}
-          radius={0.24}
-          smoothness={3}
-          position={[0.6, 0.64, 0.65]}
-          castShadow
-          receiveShadow
-        >
-          <meshStandardMaterial color="#bb9a6d" roughness={0.7} />
-        </RoundedBox>
-        <Box
-          position={[0.6, 0.33, 0.65]}
-          size={[0.8, 0.6, 1.25]}
-          color="#8c7759"
-        />
-        <Box
-          position={[0.45, 0.75, 0.45]}
-          size={[0.65, 0.06, 0.8]}
-          color="#e0d8b8"
-        />
-        <Box
-          position={[0.55, 0.81, 0.37]}
-          size={[0.57, 0.05, 0.65]}
-          color="#658378"
-        />
-        <Plant position={[1.7, 0.08, 3.1]} scale={1.25} />
-      </group>
-      {/* Slatted sideboard and a reading corner. */}
-      <group position={[9.6, 0, 5.5]}>
-        <Box position={[0, 0.6, 2.6]} size={[4.7, 1.15, 1.1]} color="#a78b63" />
-        {Array.from({ length: 24 }, (_, i) => (
-          <Box
-            key={i}
-            position={[-2.2 + i * 0.19, 0.6, 3.18]}
-            size={[0.07, 1.06, 0.08]}
-            color="#c1a276"
-          />
-        ))}
-        <Box
-          position={[0, 1.23, 2.6]}
-          size={[4.85, 0.13, 1.2]}
-          color="#ddc8a1"
-        />
-        <Plant position={[1.5, 1.3, 2.6]} scale={0.65} />
-        <Box
-          position={[-1, 1.39, 2.6]}
-          size={[0.9, 0.2, 0.55]}
-          color="#d6c8a7"
-        />
-        <Box
-          position={[-1.05, 1.53, 2.6]}
-          size={[0.8, 0.07, 0.5]}
-          color="#607f74"
-        />
-        <Chair position={[-0.9, 0, -0.2]} rotation={-0.4} color="#bb9f75" />
-        <Chair position={[1.05, 0, -0.2]} rotation={0.4} color="#bb9f75" />
-        <Box
-          position={[0, 0.55, -1.8]}
-          size={[1.4, 0.12, 1.2]}
-          color="#c7b18b"
-          rounded
-        />
-        <Box
-          position={[0, 0.28, -1.8]}
-          size={[0.12, 0.55, 0.12]}
-          color="#53665a"
-        />
-      </group>
-      <Plant position={[-11.8, 0.05, back + 5]} scale={1.5} />
-      <Plant position={[11.6, 0.05, 1.8]} scale={1.65} />
-      <Plant position={[-11.8, 0.05, -0.3]} scale={1.4} />
-      {/* Wall-mounted cantilevers support the lights without hiding the floor. */}
+
+      {/* Suspended linear lights hang from the back wall, leaving the scene open. */}
       {[-4.3, 2.5].map((x) => (
         <group key={x}>
-          {[-0.32, 0.32].map((dx) => (
-            <group key={dx}>
-              <Box
-                position={[x + dx, 3.48, back + 0.25]}
-                size={[0.18, 0.55, 0.22]}
-                color="#53635a"
-              />
-              <Box
-                position={[x + dx, 3.7, (back + 1) / 2]}
-                size={[0.08, 0.12, 1 - back]}
-                color="#53635a"
-              />
-            </group>
-          ))}
-          {[-5, 1].map((z) => (
-            <Box
-              key={`crossbar-${z}`}
-              position={[x, 3.7, z]}
-              size={[0.75, 0.12, 0.1]}
-              color="#53635a"
-            />
-          ))}
-          {[-5, 1].map((z) => (
-            <Box
-              key={z}
-              position={[x, 3.53, z]}
-              size={[0.025, 0.34, 0.025]}
-              color="#53635a"
-            />
-          ))}
           <Box
-            position={[x, 3.35, -2]}
-            size={[0.22, 0.16, 7]}
-            color="#46594f"
+            position={[x, 3.24, (back + 1) / 2]}
+            size={[0.12, 0.12, 1 - back]}
+            color="#304a5b"
+          />
+          <Box
+            position={[x, 3.04, -2]}
+            size={[0.3, 0.16, 7]}
+            color="#1b3545"
             rounded
           />
           <Box
-            position={[x, 3.255, -2]}
-            size={[0.16, 0.035, 6.8]}
-            color="#eee6bd"
-            emissive="#eee6bd"
-            emissiveIntensity={0.65}
+            position={[x, 2.95, -2]}
+            size={[0.22, 0.025, 6.8]}
+            color="#a4f5f5"
+            emissive="#a4f5f5"
           />
         </group>
       ))}

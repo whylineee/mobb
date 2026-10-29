@@ -49,9 +49,9 @@ describe("session truth", () => {
     expect(a.activity).toBe("idle");
     expect(a.task?.text).toBe("Fix parser");
   });
-  it("shows only confirmed live work and removes robots when the task stops", () => {
+  it("shows confirmed open sessions after a turn ends", () => {
     let session = reduceSession(undefined, hook("SessionStart"));
-    expect(visibleInOffice(session)).toBe(false);
+    expect(visibleInOffice(session)).toBe(true);
     session = reduceSession(
       session,
       hook("UserPromptSubmit", { prompt: "Current work" }, 1100),
@@ -69,7 +69,7 @@ describe("session truth", () => {
     expect(session.activity).toBe("waiting");
     expect(visibleInOffice(session)).toBe(true);
     session = reduceSession(session, hook("Stop", {}, 1300));
-    expect(visibleInOffice(session)).toBe(false);
+    expect(visibleInOffice(session)).toBe(true);
     expect(session.lifecycle).toBe("open");
   });
   it("removes a confirmed ended robot immediately while preserving its session", () => {

@@ -9,7 +9,7 @@ export function Plant({
 }) {
   return (
     <group position={position} scale={scale}>
-      <Pot position={[0, 0.25, 0]} color="#d3bd9c" />
+      <Pot position={[0, 0.25, 0]} color="#718b95" />
       {[0, 1, 2, 3, 4].map((i) => (
         <Foliage
           key={i}
@@ -29,7 +29,7 @@ export function Plant({
 export function Chair({
   position,
   rotation = 0,
-  color = "#657b6c",
+  color = "#476776",
 }: {
   position: Seat;
   rotation?: number;
@@ -69,7 +69,7 @@ export function Glass({ position, size }: { position: Seat; size: Seat }) {
     <mesh position={position}>
       <boxGeometry args={size} />
       <meshStandardMaterial
-        color="#bddbd0"
+        color="#91d0dc"
         transparent
         opacity={0.13}
         roughness={0.12}

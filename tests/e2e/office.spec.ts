@@ -104,11 +104,16 @@ test("process samples keep full panel text without reloading semantic details", 
   );
 });
 
-test("only current work creates an office agent", async ({ page, request }) => {
+test("open sessions stay in the office between turns", async ({
+  page,
+  request,
+}) => {
   await hook(request, "current-work", "SessionStart");
   await page.goto(`/#token=${UI_TOKEN}`);
-  await expect(page.getByText("Офіс поки порожній")).toBeVisible();
-  await expect(page.getByTestId("robot-label")).toHaveCount(0);
+  await expect(page.getByTestId("robot-label")).toHaveCount(1);
+  await expect(
+    page.getByTestId("robot-label").locator(".robot-caption"),
+  ).toContainText("Очікує запиту");
   await hook(request, "current-work", "UserPromptSubmit", {
     prompt: "Поточна задача",
     turn_id: "current",
@@ -119,7 +124,10 @@ test("only current work creates an office agent", async ({ page, request }) => {
     "Поточна задача",
   );
   await hook(request, "current-work", "Stop", { turn_id: "current" });
-  await expect(page.getByTestId("robot-label")).toHaveCount(0);
+  await expect(page.getByTestId("robot-label")).toHaveCount(1);
+  await expect(
+    page.getByTestId("robot-label").locator(".robot-caption"),
+  ).toContainText("Очікує запиту");
   await expect(page.getByTestId("panel-status")).toHaveText("Очікує запиту");
   await expect(page.getByTestId("session-panel")).toContainText(
     "Поточна задача",
@@ -941,4 +949,39 @@ test("scene sleeps when static, stops in the background, and caps typing frames"
   const reducedStart = await frames();
   await page.waitForTimeout(1200);
   expect((await frames()) - reducedStart).toBe(0);
+});
+
+test("office labels show current work and confirmed attention", async ({
+  page,
+  request,
+}) => {
+  await hook(request, "office-label", "UserPromptSubmit", {
+    prompt: "Перевірити проєкт",
+    turn_id: "label-turn",
+  });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto(`/#token=${UI_TOKEN}`);
+  const marker = page.getByRole("button", {
+    name: "Вибрати Codex office-label",
+    exact: true,
+  });
+  await expect(marker.locator(".robot-caption")).toContainText("AgentWatch");
+  await expect(marker.locator(".robot-caption")).toContainText("Працює");
+  await expect(marker).toHaveAccessibleDescription("AgentWatch. Працює.");
+  await expect(page.locator(".office-project-zone")).toContainText(
+    "AgentWatch",
+  );
+  await hook(request, "office-label", "Notification", {
+    notification_type: "permission_prompt",
+  });
+  await expect(marker).toHaveClass(/robot-attention/);
+  await expect(marker).toHaveAccessibleDescription(
+    "AgentWatch. Потрібна увага.",
+  );
+  await expect(marker.locator(".robot-caption")).toContainText(
+    "Потрібна увага",
+  );
+  await expect(page.locator(".attention-count")).toHaveText("1");
+  await hook(request, "office-label", "Stop", { turn_id: "label-turn" });
+  await expect(page.locator(".attention-count")).toHaveCount(0);
 });
