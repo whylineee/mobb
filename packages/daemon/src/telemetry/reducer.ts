@@ -33,6 +33,11 @@ export function reduceSession(
         subagents: [],
         sources: [],
       };
+  if (d.model) s.model = d.model;
+  if (d.parentSessionId && d.parentSessionId !== event.sessionId)
+    s.parentSessionKey = `${event.provider}:${d.parentSessionId}`;
+  // Usage supplies metadata, never liveness or activity evidence.
+  if (event.kind === "usage") return s;
   s.lastObservedAt = Math.max(s.lastObservedAt, event.observedAt);
   if (!s.sources.includes(event.source)) s.sources.push(event.source);
   const subagentEvent =
@@ -42,7 +47,7 @@ export function reduceSession(
     if (id) {
       let child = s.subagents.find((a) => a.id === id);
       if (!child) {
-        child = { id, activity: "unknown", updatedAt: 0 };
+        child = { id, activity: "unknown", lifecycle: "unknown", updatedAt: 0 };
         s.subagents.push(child);
       }
       if (d.agentType) child.type ??= d.agentType;
@@ -51,6 +56,12 @@ export function reduceSession(
       if (at >= (child.updatedAt ?? 0)) {
         child.updatedAt = at;
         if (d.task) child.task = d.task;
+        if (event.kind === "subagent.end") child.lifecycle = "ended";
+        else if (
+          (event.source === "hook" || d.confirmed) &&
+          event.kind !== "turn.end"
+        )
+          child.lifecycle = "open";
         if (event.kind === "subagent.end" || event.kind === "turn.end")
           child.activity = "idle";
         else if (event.kind === "attention") child.activity = "waiting";

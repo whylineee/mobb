@@ -1,4 +1,14 @@
 import { z } from "zod";
+export type {
+  TimeRange,
+  TokenTotals,
+  AgentRow,
+  AnalyticsFilter,
+  AgentQuery,
+  AgentPage,
+  AgentCounts,
+  Statistics,
+} from "./analytics.js";
 export {
   parseProcessTable,
   exclusiveBindings,
@@ -27,8 +37,28 @@ export const EventKindSchema = z.enum([
   "process.observed",
   "process.exit",
   "error",
+  "usage",
 ]);
 export type EventKind = z.infer<typeof EventKindSchema>;
+
+const counter = z
+  .number()
+  .int()
+  .nonnegative()
+  .max(Number.MAX_SAFE_INTEGER)
+  .nullable();
+export const UsageSchema = z.object({
+  key: z.string().min(1).max(512),
+  mode: z.enum(["cumulative", "message"]),
+  live: z.boolean(),
+  input: counter,
+  output: counter,
+  cacheRead: counter,
+  cacheWrite: counter,
+  reasoning: counter,
+  total: counter,
+});
+export type Usage = z.infer<typeof UsageSchema>;
 
 export const EventDataSchema = z.object({
   cwd: z.string().optional(),
@@ -52,6 +82,8 @@ export const EventDataSchema = z.object({
   processStartedAt: z.number().optional(),
   cpuPercent: z.number().nonnegative().optional(),
   memoryBytes: z.number().nonnegative().optional(),
+  model: z.string().max(256).optional(),
+  usage: UsageSchema.optional(),
 });
 export type EventData = z.infer<typeof EventDataSchema>;
 export const AgentEventSchema = z.object({
@@ -96,6 +128,7 @@ export type ToolCall = {
   endedAt?: number;
 };
 export type Subagent = {
+  lifecycle?: Lifecycle;
   updatedAt?: number;
   id: string;
   type?: string;
@@ -110,6 +143,8 @@ export type ProcessBinding = {
   memoryBytes?: number;
 };
 export type Session = {
+  parentSessionKey?: string;
+  model?: string;
   revision?: number;
   detailsRevision?: number;
   isSummary?: boolean;

@@ -6,6 +6,8 @@ import {
   readFileSync,
   renameSync,
   writeFileSync,
+  linkSync,
+  unlinkSync,
 } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -58,6 +60,20 @@ export function loadConfig(home = agentwatchHome()): RuntimeConfig {
       process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude"),
     ),
   };
-  writePrivateJson(file, c);
+  // Publish a fully written config atomically without replacing a concurrent initializer.
+  const temp = `${file}.${randomUUID()}.tmp`;
+  writeFileSync(temp, `${JSON.stringify(c, null, 2)}\n`, {
+    mode: 0o600,
+    flag: "wx",
+  });
+  try {
+    linkSync(temp, file);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST")
+      return loadConfig(home);
+    throw error;
+  } finally {
+    unlinkSync(temp);
+  }
   return c;
 }

@@ -7,6 +7,7 @@ import {
   MAX_HOOK_BYTES,
   ProviderSchema,
   type RuntimeConfig,
+  type AgentQuery,
 } from "@agentwatch/shared";
 import { AgentService } from "./service.js";
 import { normalizeHook } from "./telemetry/providers.js";
@@ -21,6 +22,7 @@ export function createApp(options: {
   config: RuntimeConfig;
   service: AgentService;
   webRoot?: string;
+  onShutdown?: () => void;
   onHook?: (
     provider: string,
     payload: unknown,
@@ -61,6 +63,48 @@ export function createApp(options: {
     }),
   );
   app.get("/api/state", (c) => c.json(service.snapshot()));
+  const analyticsQuery = (query: Record<string, string>): AgentQuery | null => {
+    const { range, provider, project, search, status, cursor, limit } = query;
+    if (
+      (range && !["1h", "24h", "7d"].includes(range)) ||
+      (provider && !["codex", "claude"].includes(provider)) ||
+      (status &&
+        !["working", "waiting", "idle", "unknown", "ended"].includes(status)) ||
+      (project && project.length > 500) ||
+      (search && search.length > 256) ||
+      (cursor && (cursor.length > 4096 || !/^[A-Za-z0-9_-]+$/.test(cursor))) ||
+      (limit &&
+        (!/^\d+$/.test(limit) || Number(limit) < 1 || Number(limit) > 100))
+    )
+      return null;
+    return {
+      range: range as AgentQuery["range"],
+      provider: provider as AgentQuery["provider"],
+      project,
+      search,
+      status: status as AgentQuery["status"],
+      cursor,
+      limit: limit ? Number(limit) : 100,
+    };
+  };
+  app.get("/api/agents", (c) => {
+    const query = analyticsQuery(c.req.query());
+    return query
+      ? c.json(service.agents(query))
+      : c.json({ error: "Invalid analytics query" }, 400);
+  });
+  app.get("/api/statistics", (c) => {
+    const query = analyticsQuery(c.req.query());
+    return query
+      ? c.json(service.statistics(query))
+      : c.json({ error: "Invalid analytics query" }, 400);
+  });
+  app.post("/api/daemon/stop", (c) => {
+    if (!options.onShutdown)
+      return c.json({ error: "Shutdown unavailable" }, 503);
+    setTimeout(options.onShutdown, 10);
+    return c.json({ accepted: true }, 202);
+  });
   app.get("/api/sessions/:id/events", (c) => {
     const cursor = c.req.query("cursor"),
       limit = Number(c.req.query("limit") ?? 50);

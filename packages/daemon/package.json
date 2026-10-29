@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@agentwatch/tui": "workspace:*",
     "@agentwatch/shared": "workspace:*",
     "@hono/node-server": "2.1.5",
     "better-sqlite3": "13.0.3",

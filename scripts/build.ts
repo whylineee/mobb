@@ -23,6 +23,7 @@ await bundle(
 );
 await bundle("packages/hook-cli/src/cli.ts", "packages/hook-cli/dist/cli.js");
 await bundle("packages/daemon/src/cli.ts", "packages/daemon/dist/cli.js", true);
+await bundle("packages/tui/src/index.tsx", "packages/tui/dist/index.js", true);
 if (!process.argv.includes("--server-only")) {
   await new Promise<void>((ok, fail) => {
     const p = spawn("pnpm", ["--filter", "@agentwatch/web", "build"], {
