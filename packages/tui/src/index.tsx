@@ -38,8 +38,15 @@ function Dashboard({ options }: { options: Options }) {
                           ? "tab"
                           : key.backspace || key.delete
                             ? "backspace"
-                            : input;
-    setState((current) => reduceUi({ ...current, columns, rows }, action));
+                            : undefined;
+    setState((current) => {
+      const textAction = current.searching
+        ? `text:${input}`
+        : input.length === 1 || input.startsWith("/")
+          ? input
+          : "";
+      return reduceUi({ ...current, columns, rows }, action ?? textAction);
+    });
   });
   useEffect(() => {
     if (state.exit) exit();

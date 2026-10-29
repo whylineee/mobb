@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import stringWidth from "string-width";
 import { fit, sparkline, renderDashboard, treeRows } from "./view.js";
 import { applyPage, initialState, reduceUi, type UiState } from "./state.js";
-import type { AgentRow } from "@agentwatch/shared";
+import type { AgentRow, Session } from "@agentwatch/shared";
 const row = (key: string, parentKey?: string): AgentRow => ({
   key,
   parentKey,
@@ -15,6 +15,45 @@ const row = (key: string, parentKey?: string): AgentRow => ({
   status: "working",
   lastObservedAt: 1,
   tokens: null,
+});
+const detailState = (task: string): UiState => ({
+  ...initialState(),
+  agents: [row("agent")],
+  selectedKey: "agent",
+  detailKey: "agent",
+  detail: {
+    key: "agent",
+    sessionId: "agent",
+    provider: "codex",
+    project: "mobb",
+    origin: "cli",
+    lifecycle: "open",
+    activity: "working",
+    freshness: "fresh",
+    requiresAttention: false,
+    lastActivityAt: 1,
+    lastObservedAt: 1,
+    stateAt: 1,
+    task: { text: task, source: "hook", updatedAt: 1 },
+    activeTools: [],
+    subagents: [],
+    sources: ["hook"],
+  } satisfies Session,
+});
+it("scrolls up immediately after repeated attempts to scroll past the end", () => {
+  let state = detailState("x".repeat(80 * 40));
+  for (let i = 0; i < 20; i++) state = reduceUi(state, "pagedown");
+  const bottom = renderDashboard(state).map((line) => line.text);
+  state = reduceUi(state, "pageup");
+  expect(renderDashboard(state).map((line) => line.text)).not.toEqual(bottom);
+});
+it("preserves task text after a full line of indentation", () => {
+  const state = detailState(" ".repeat(80) + "visible-task-tail");
+  expect(
+    renderDashboard(state)
+      .map((line) => line.text)
+      .join("\n"),
+  ).toContain("visible-task-tail");
 });
 it("fits Unicode names and removes terminal control sequences", () => {
   const value = fit("\u001b[31m危険🙂\u001b]52;c;secret\u0007\nname", 12);
@@ -127,11 +166,9 @@ it("opens and closes the charts view with the keyboard on narrow terminals", () 
   ).toContain("АГЕНТИ");
 });
 it("keeps detail scrolling available when pressing g inside details", () => {
-  const selected = row("agent");
   let state: UiState = {
-    ...initialState(),
-    agents: [selected],
-    selectedKey: selected.key,
+    ...detailState("x".repeat(80 * 40)),
+    detailKey: undefined,
   };
   state = reduceUi(state, "enter");
   state = reduceUi(state, "g");

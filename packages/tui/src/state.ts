@@ -7,7 +7,7 @@ import type {
   EventPage,
   CodexLimits,
 } from "@agentwatch/shared";
-import { treeRows } from "./view.js";
+import { detailContent, treeRows } from "./view.js";
 
 export type UiState = {
   columns: number;
@@ -131,18 +131,17 @@ export function reduceUi(state: UiState, action: string): UiState {
   if (action === "?") return { ...state, help: !state.help };
   if (state.help) return state;
   if (state.detailKey) {
+    const limit = Math.max(0, detailContent(state).length - (state.rows - 3));
+    const scroll = Math.min(state.detailScroll, limit);
     if (action === "down" || action === "pagedown")
       return {
         ...state,
-        detailScroll: state.detailScroll + (action === "pagedown" ? 8 : 1),
+        detailScroll: Math.min(limit, scroll + (action === "pagedown" ? 8 : 1)),
       };
     if (action === "up" || action === "pageup")
       return {
         ...state,
-        detailScroll: Math.max(
-          0,
-          state.detailScroll - (action === "pageup" ? 8 : 1),
-        ),
+        detailScroll: Math.max(0, scroll - (action === "pageup" ? 8 : 1)),
       };
     return state;
   }

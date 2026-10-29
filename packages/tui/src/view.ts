@@ -233,7 +233,7 @@ function graph(
   return out.slice(0, height).map((v) => fit(v, width));
 }
 
-function detailLines(state: UiState): FrameLine[] {
+export function detailContent(state: UiState): string[] {
   const selected = state.agents.find((r) => r.key === state.detailKey),
     session =
       state.detail?.key === selected?.sessionKey ? state.detail : undefined;
@@ -284,18 +284,11 @@ function detailLines(state: UiState): FrameLine[] {
           `${new Date(event.occurredAt).toLocaleTimeString()} ${event.kind}`,
         );
   }
-  const wrapped = raw.flatMap((text) => {
-    const safe = clean(text),
-      parts: string[] = [];
-    let remaining = safe;
-    while (stringWidth(remaining) > state.columns) {
-      const chunk = fit(remaining, state.columns).trimEnd();
-      if (!chunk) break;
-      parts.push(chunk);
-      remaining = remaining.slice(chunk.length);
-    }
-    return [...parts, remaining];
-  });
+  return raw.flatMap((text) => wrap(clean(text), state.columns));
+}
+
+function detailLines(state: UiState): FrameLine[] {
+  const wrapped = detailContent(state);
   const height = state.rows - 3,
     offset = Math.min(state.detailScroll, Math.max(0, wrapped.length - height));
   return [
@@ -492,15 +485,23 @@ function wideDashboard(state: UiState): FrameLine[] {
 }
 
 function wrap(value: string, width: number): string[] {
+  if (width <= 0) return [];
   const chunks: string[] = [];
-  let rest = value;
-  while (stringWidth(rest) > width) {
-    const chunk = fit(rest, width).trimEnd();
-    if (!chunk) break;
-    chunks.push(chunk);
-    rest = rest.slice(chunk.length);
+  let chunk = "",
+    size = 0;
+  for (const { segment } of new Intl.Segmenter(undefined, {
+    granularity: "grapheme",
+  }).segment(value)) {
+    const length = stringWidth(segment);
+    if (size + length > width && chunk) {
+      chunks.push(chunk);
+      chunk = "";
+      size = 0;
+    }
+    chunk += segment;
+    size += length;
   }
-  return [...chunks, rest];
+  return [...chunks, chunk];
 }
 
 export function renderDashboard(state: UiState): FrameLine[] {
