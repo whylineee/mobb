@@ -6,6 +6,7 @@ import {
   type AgentEvent,
   type Session,
 } from "@agentwatch/shared";
+import { reduceSession } from "./telemetry/reducer.js";
 
 export type StorageLimits = {
   cachedSessions: number;
@@ -136,6 +137,71 @@ export class SessionStorage {
         Number(session.lifecycle === "open"),
       );
   }
+  recordEvent(
+    event: AgentEvent,
+    revision: number,
+  ): { session: Session; event: AgentEvent } | undefined {
+    if (this.isPrunedReplay(event)) return undefined;
+    const result = this.db.transaction(() => {
+      const inserted = this.db
+        .prepare(
+          "INSERT OR IGNORE INTO events(event_id,session_key,occurred_at,data) VALUES (?,?,?,?)",
+        )
+        .run(
+          event.id,
+          event.sessionKey,
+          event.occurredAt,
+          JSON.stringify(event),
+        );
+      let applied = event;
+      let published = event;
+      if (!inserted.changes) {
+        const existing = JSON.parse(
+          (
+            this.db
+              .prepare("SELECT data FROM events WHERE event_id=?")
+              .get(event.id) as Row
+          ).data,
+        ) as AgentEvent;
+        const strong =
+          existing.source === "hook" && event.source !== "hook"
+            ? existing
+            : event;
+        const weak = strong === event ? existing : event;
+        const merged: AgentEvent = {
+          ...weak,
+          ...strong,
+          data: { ...weak.data, ...strong.data },
+        };
+        if (
+          JSON.stringify(existing.data) === JSON.stringify(merged.data) &&
+          existing.source === merged.source
+        )
+          return undefined;
+        this.db
+          .prepare("UPDATE events SET data=? WHERE event_id=?")
+          .run(JSON.stringify(merged), event.id);
+        published = merged;
+        // Historical enrichment cannot inherit a previous run's live authority.
+        applied = {
+          ...merged,
+          source: event.source,
+          observedAt: event.observedAt,
+          data: { ...merged.data, confirmed: event.data.confirmed },
+        };
+      }
+      const session = reduceSession(this.get(event.sessionKey), applied);
+      session.detailsRevision = revision + 1;
+      this.save(session);
+      this.trimHistory(event.sessionKey);
+      this.db
+        .prepare("UPDATE meta SET value=value+1 WHERE key='revision'")
+        .run();
+      return { session, event: published };
+    })();
+    if (result) this.remember(result.session);
+    return result;
+  }
   count(): number {
     return (
       this.db.prepare("SELECT count(*) AS count FROM sessions").get() as {
@@ -161,7 +227,7 @@ export class SessionStorage {
         .all() as Row[]
     ).map((row) => JSON.parse(row.data) as Session);
   }
-  isPrunedReplay(event: AgentEvent): boolean {
+  private isPrunedReplay(event: AgentEvent): boolean {
     if (event.source !== "log" || event.data.confirmed) return false;
     const floor = this.db
       .prepare(
@@ -200,7 +266,7 @@ export class SessionStorage {
     this.floor(key, boundary.at);
     this.db.prepare(`DELETE FROM events WHERE seq IN (${select})`).run(...args);
   }
-  trimHistory(key: string): void {
+  private trimHistory(key: string): void {
     this.trim(key, this.limits.perSessionEvents);
     this.trim("*", this.limits.totalEvents);
   }

@@ -217,7 +217,7 @@ export type RuntimeConfig = {
 export function redact(input: string): string {
   return input
     .replace(
-      /(authorization\s*[:=]\s*["']?(?:bearer|basic)\s+)[^\s"'\\]+/gi,
+      /(authorization["']?\s*[:=]\s*["']?(?:bearer|basic)\s+)[^\s"'\\]+/gi,
       "$1[REDACTED]",
     )
     .replace(
@@ -225,7 +225,7 @@ export function redact(input: string): string {
       "[REDACTED]",
     )
     .replace(
-      /(\b[A-Z0-9_-]{0,64}(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PRIVATE[_-]?KEY)["']?\s*[:=]\s*)["']?[^\s,"'\\]+["']?/gi,
+      /(\b[A-Z0-9_-]{0,64}(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PRIVATE[_-]?KEY|AUTHORIZATION)["']?\s*[:=]\s*)(?:"(?:[^"\\]|\\(?:[\s\S]|$))*(?:"|$)|'(?:[^'\\]|\\(?:[\s\S]|$))*(?:'|$)|[^\s,"'\\]+)/gi,
       "$1[REDACTED]",
     )
     .replace(/(https?:\/\/)[^\s/@:]+:[^\s/@]+@/gi, "$1[REDACTED]@");
@@ -237,7 +237,19 @@ export function boundedText(value: unknown): {
 } {
   if (value === undefined || value === null)
     return { text: undefined, truncated: false };
-  const raw = typeof value === "string" ? value : JSON.stringify(value);
+  const raw =
+    typeof value === "string"
+      ? value
+      : JSON.stringify(value, (key, nested: unknown) => {
+          if (
+            key &&
+            /(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD|PRIVATE[_-]?KEY|AUTHORIZATION)$/i.test(
+              key,
+            )
+          )
+            return "[REDACTED]";
+          return typeof nested === "string" ? redact(nested) : nested;
+        });
   const text = redact(raw ?? "");
   return { text: text.slice(0, MAX_TEXT), truncated: text.length > MAX_TEXT };
 }

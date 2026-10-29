@@ -76,73 +76,18 @@ export class AgentService {
       }
       return changed;
     }
-    if (this.closed || this.storage.isPrunedReplay(event)) return false;
-    let next: Session | undefined;
-    let published = event;
-    const changed = this.db.transaction(() => {
-      const result = this.db
-        .prepare(
-          "INSERT OR IGNORE INTO events(event_id,session_key,occurred_at,data) VALUES (?,?,?,?)",
-        )
-        .run(
-          event.id,
-          event.sessionKey,
-          event.occurredAt,
-          JSON.stringify(event),
-        );
-      let applied = event;
-      if (!result.changes) {
-        const existing = JSON.parse(
-          (
-            this.db
-              .prepare("SELECT data FROM events WHERE event_id=?")
-              .get(event.id) as Row
-          ).data,
-        ) as AgentEvent;
-        const strong =
-            existing.source === "hook" && event.source !== "hook"
-              ? existing
-              : event,
-          weak = strong === event ? existing : event;
-        const merged: AgentEvent = {
-          ...weak,
-          ...strong,
-          data: { ...weak.data, ...strong.data },
-        };
-        published = merged;
-        if (
-          JSON.stringify(existing.data) === JSON.stringify(merged.data) &&
-          existing.source === merged.source
-        )
-          return false;
-        this.db
-          .prepare("UPDATE events SET data=? WHERE event_id=?")
-          .run(JSON.stringify(merged), event.id);
-        // Replayed log enrichment must never inherit the liveness authority of
-        // a hook persisted in a previous daemon run.
-        applied = {
-          ...merged,
-          source: event.source,
-          observedAt: event.observedAt,
-          data: { ...merged.data, confirmed: event.data.confirmed },
-        };
-      }
-      next = reduceSession(this.storage.get(event.sessionKey), applied);
-      next.detailsRevision = this.revision + 1;
-      this.saveSession(next);
-      this.storage.trimHistory(event.sessionKey);
-      this.db
-        .prepare("UPDATE meta SET value=value+1 WHERE key='revision'")
-        .run();
-      return true;
-    })();
-    if (!changed || !next) return false;
+    if (this.closed) return false;
+    const result = this.storage.recordEvent(event, this.revision);
+    if (!result) return false;
     this.analytics.begin(event);
-    this.storage.remember(next);
     this.revision++;
     this.publish({
       type: "delta",
-      data: { revision: this.revision, session: next, event: published },
+      data: {
+        revision: this.revision,
+        session: result.session,
+        event: result.event,
+      },
     });
     return true;
   }

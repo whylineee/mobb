@@ -6,6 +6,7 @@ import {
 } from "./providers.js";
 import { reduceSession, visibleInOffice } from "./reducer.js";
 import { redact, sessionStatus } from "@agentwatch/shared";
+import { AgentService } from "../service.js";
 
 const meta = (id: string, time = 1000) => ({
   id,
@@ -320,6 +321,41 @@ describe("provider adapters and privacy", () => {
     expect(
       redact('{"uiToken":"private-ui-token","hookToken":"private-hook-token"}'),
     ).not.toContain("private-ui-token");
+  });
+  it("masks structured authorization and entire quoted secrets in tool output", () => {
+    const e = hook("PostToolUse", {
+      tool_name: "Read",
+      tool_use_id: "redaction",
+      tool_response: {
+        authorization: "Bearer opaque-credential",
+        password: "correct horse battery staple",
+        secret: 'escaped "quoted" value',
+        nested: '{"password":"hidden nested credential"}',
+        apiKey: ["array-secret-one", "array-secret-two"],
+        message: "ordinary output remains visible",
+      },
+    });
+    expect(e.data.result).not.toContain("opaque-credential");
+    expect(e.data.result).not.toContain("horse battery staple");
+    expect(e.data.result).not.toContain("quoted");
+    expect(e.data.result).not.toContain("hidden nested credential");
+    expect(e.data.result).not.toContain("array-secret");
+    expect(e.data.result).toContain("ordinary output remains visible");
+    const service = new AgentService({ dbPath: ":memory:", now: () => 1000 });
+    try {
+      service.ingest(e);
+      const stored = service.events(e.sessionKey).events[0]?.data.result;
+      expect(stored).toBe(e.data.result);
+      expect(stored).not.toContain("opaque-credential");
+      expect(stored).not.toContain("horse battery staple");
+    } finally {
+      service.close();
+    }
+    expect(redact('PASSWORD="first second')).not.toContain("second");
+    expect(redact('password="part\\\\remaining"')).not.toContain("remaining");
+    expect(redact("Authorization: Basic opaque-value")).not.toContain(
+      "opaque-value",
+    );
   });
   it("ignores malformed and unknown events without inventing sessions", () => {
     expect(
