@@ -218,3 +218,29 @@ it("recovers a real rollout as unknown, then processes new file activity live", 
     service.close();
   }
 });
+
+it("recovers appended activity when the file watcher misses a change", async () => {
+  const root = temp(),
+    home = join(root, "watch"),
+    config = loadConfig(home);
+  const path = join(root, "session.jsonl");
+  const record = (type: string, payload: unknown) =>
+    JSON.stringify({ type, timestamp: new Date().toISOString(), payload }) +
+    "\n";
+  writeFileSync(path, record("session_meta", { id: "existing" }));
+  const service = new AgentService({ dbPath: ":memory:" });
+  const files = new FileCollectors(service, config, home);
+  try {
+    files.register("codex", path, "existing");
+    await expect
+      .poll(() => service.events("codex:existing").events.length)
+      .toBe(1);
+    appendFileSync(path, record("event_msg", { type: "task_started" }));
+    await files.reconcile();
+    expect(service.get("codex:existing")?.lifecycle).toBe("open");
+    expect(service.get("codex:existing")?.activity).toBe("working");
+  } finally {
+    await files.close();
+    service.close();
+  }
+});

@@ -18,6 +18,8 @@ type FileContext = { provider: Provider; sessionId?: string };
 export class FileCollectors {
   private watchers: FSWatcher[] = [];
   private context = new Map<string, FileContext>();
+  private checked = new Map<string, string>();
+  private reconciling = false;
   private tailer: JsonlTailer;
   private ready = new Map<Provider, boolean>();
   private dropped = new Map<Provider, number>();
@@ -87,6 +89,10 @@ export class FileCollectors {
     try {
       const fileStat = await stat(path);
       if (!live && fileStat.mtimeMs < Date.now() - RETENTION_MS) return;
+      this.checked.set(
+        path,
+        `${fileStat.dev}:${fileStat.ino}:${fileStat.size}:${fileStat.mtimeMs}`,
+      );
       if (!this.context.has(path)) {
         const id = path.match(
           /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i,
@@ -135,6 +141,25 @@ export class FileCollectors {
     void this.readFile(provider, full, false);
   }
 
+  async reconcile(): Promise<void> {
+    if (this.closed || this.reconciling) return;
+    this.reconciling = true;
+    try {
+      for (const [path, context] of this.context) {
+        try {
+          const s = await stat(path);
+          const signature = `${s.dev}:${s.ino}:${s.size}:${s.mtimeMs}`;
+          if (this.checked.get(path) !== signature)
+            await this.readFile(context.provider, path, true);
+        } catch {
+          // Files can disappear between watcher notifications and polling.
+        }
+      }
+    } finally {
+      this.reconciling = false;
+    }
+  }
+
   start(): void {
     for (const provider of ["codex", "claude"] as const) {
       this.ready.set(provider, false);
@@ -154,6 +179,7 @@ export class FileCollectors {
       watcher.on("unlink", (path) => {
         this.tailer.forget(path);
         this.context.delete(path);
+        this.checked.delete(path);
       });
       watcher.on("ready", () => {
         this.ready.set(provider, true);
@@ -165,7 +191,10 @@ export class FileCollectors {
       this.watchers.push(watcher);
     }
     this.report();
-    this.timer = setInterval(() => this.report(), 5000);
+    this.timer = setInterval(() => {
+      this.report();
+      void this.reconcile();
+    }, 5000);
     this.timer.unref();
   }
 
