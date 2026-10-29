@@ -322,7 +322,7 @@ export function renderDashboard(state: UiState): FrameLine[] {
     );
     out.push(
       line(
-        `УСІ АГЕНТИ ${number(c?.total)}    Сесії ${number(c?.sessions)}    Субагенти ${number(c?.subagents)}    Невідомо ${number(c?.unknown)}`,
+        `ВІДКРИТІ АГЕНТИ ${number(c?.total)}    Сесії ${number(c?.sessions)}    Субагенти ${number(c?.subagents)}`,
         "white",
         true,
       ),
@@ -344,6 +344,7 @@ export function renderDashboard(state: UiState): FrameLine[] {
         `Cache read ${number(stats?.tokens.cacheRead)} / write ${number(stats?.tokens.cacheWrite)} · входять в Input`,
       ),
     );
+    out.push(line("Відкриті раніше сесії можуть бути не виявлені", "yellow"));
     out.push(
       line(
         `[t] ${state.range}  [p] ${state.provider ?? "усі"}  [j] ${state.project ?? "усі проєкти"}  [s] ${state.status ? labels[state.status] : "усі стани"}`,

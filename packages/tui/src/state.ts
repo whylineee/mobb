@@ -173,7 +173,7 @@ export function reduceUi(state: UiState, action: string): UiState {
     return {
       ...state,
       status: cycle<UiState["status"]>(
-        [undefined, "working", "waiting", "idle", "unknown", "ended"],
+        [undefined, "working", "waiting", "idle"],
         state.status,
       ),
       pageCount: 1,

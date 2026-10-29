@@ -338,7 +338,7 @@ export class Analytics {
       working: open.filter((r) => r.status === "working").length,
       waiting: open.filter((r) => r.status === "waiting").length,
       idle: open.filter((r) => r.status === "idle").length,
-      unknown: rows.filter((r) => r.status === "unknown").length,
+      unknown: open.filter((r) => r.status === "unknown").length,
     };
   }
 
@@ -374,8 +374,11 @@ export class Analytics {
     }
     for (const row of rows)
       row.tokens = amounts.has(row.key) ? sum(amounts.get(row.key)!) : null;
-    const all = new Map(rows.map((r) => [r.key, r]));
-    const filtered = rows
+    const openRows = rows.filter(
+      (r) => r.lifecycle === "open" && r.status !== "unknown",
+    );
+    const all = new Map(openRows.map((r) => [r.key, r]));
+    const filtered = openRows
       .filter(
         (r) =>
           matches(r, query) &&

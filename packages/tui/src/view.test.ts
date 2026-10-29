@@ -47,6 +47,12 @@ it("renders bounded frames at 120x36 and 80x24 and recovers after resize", () =>
     );
   }
 });
+it("explains that already-open sessions may not be detected", () => {
+  const frame = renderDashboard({ ...initialState(), columns: 120, rows: 36 });
+  expect(frame.map((line) => line.text).join("\n")).toContain(
+    "Відкриті раніше сесії можуть бути не виявлені",
+  );
+});
 it("collapses children without losing context and survives malformed cycles", () => {
   const rows = [row("parent"), row("child", "parent")];
   expect(treeRows(rows, new Set()).map((r) => r.row.key)).toEqual([

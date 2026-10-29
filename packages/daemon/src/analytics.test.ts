@@ -51,6 +51,42 @@ afterEach(() => {
 });
 
 describe("persistent analytics", () => {
+  it("lists only confirmed open sessions while preserving idle sessions after a turn ends", () => {
+    const s = make();
+    s.ingest(usage(100, false, "history"));
+    s.ingest(hook("working"));
+    s.ingest(hook("idle"));
+    s.ingest(hook("idle", "Stop"));
+    s.ingest(hook("closed"));
+    s.ingest(hook("closed", "SessionEnd"));
+    expect(s.agents().agents.map((row) => [row.key, row.status])).toEqual([
+      ["codex:idle", "idle"],
+      ["codex:working", "working"],
+    ]);
+    expect(s.statistics().counts).toMatchObject({
+      total: 2,
+      sessions: 2,
+      idle: 1,
+      working: 1,
+      unknown: 0,
+    });
+  });
+
+  it("does not expose an unconfirmed parent as context for a confirmed child", () => {
+    const root = mkdtempSync(join(tmpdir(), "agentwatch-parent-context-"));
+    roots.push(root);
+    const path = join(root, "state.sqlite"),
+      s = make(path);
+    s.ingest(hook("parent"));
+    s.close();
+    clock += 1000;
+    const next = make(path);
+    next.ingest(hook("parent", "SubagentStart", { agent_id: "new-child" }));
+    const page = next.agents();
+    expect(page.agents).toHaveLength(1);
+    expect(page.agents[0]?.kind).toBe("subagent");
+    expect(page.ancestors).toHaveLength(0);
+  });
   it("preserves project filtering, per-agent totals, and all project choices", () => {
     const s = make();
     s.ingest(hook("a", "UserPromptSubmit", { cwd: "/work/alpha" }));
@@ -94,7 +130,7 @@ describe("persistent analytics", () => {
       total: 1,
       working: 1,
       subagents: 1,
-      unknown: 1,
+      unknown: 0,
     });
   });
   it("counts the first response of a confirmed new startup without importing resumed totals", () => {
@@ -183,7 +219,7 @@ describe("persistent analytics", () => {
     expect(next.statistics().counts).toMatchObject({
       total: 1,
       subagents: 0,
-      unknown: 1,
+      unknown: 0,
     });
   });
   it("uses historical counters as baseline and never adds cumulative totals twice", () => {
