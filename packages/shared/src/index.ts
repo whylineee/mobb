@@ -184,7 +184,7 @@ export type CollectorHealth = {
   message: string;
   lastCheckedAt: number;
   lastEventAt?: number;
-  droppedEvents: number;
+  droppedEvents: number | null;
 };
 export type StateSnapshot = {
   omittedSessions?: number;

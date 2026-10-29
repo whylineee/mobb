@@ -6,8 +6,9 @@ import type {
   TimeRange,
   EventPage,
   CodexLimits,
+  CollectorHealth,
 } from "@agentwatch/shared";
-import { detailContent, treeRows } from "./view.js";
+import { detailContent, sourceContent, treeRows } from "./view.js";
 
 export type UiState = {
   columns: number;
@@ -29,6 +30,10 @@ export type UiState = {
   focus: number;
   help: boolean;
   chartsOpen: boolean;
+  sourcesOpen: boolean;
+  sourcesScroll: number;
+  collectors?: CollectorHealth[];
+  sourcesError?: string;
   detailKey?: string;
   detail?: Session;
   events?: EventPage;
@@ -60,6 +65,8 @@ export const initialState = (): UiState => ({
   focus: 0,
   help: false,
   chartsOpen: false,
+  sourcesOpen: false,
+  sourcesScroll: 0,
   codexLimits: { state: "loading" },
   detailScroll: 0,
   online: false,
@@ -102,6 +109,8 @@ export function reduceUi(state: UiState, action: string): UiState {
       searching: false,
       help: false,
       chartsOpen: false,
+      sourcesOpen: false,
+      sourcesScroll: 0,
       detailKey: undefined,
       detailScroll: 0,
     };
@@ -130,6 +139,31 @@ export function reduceUi(state: UiState, action: string): UiState {
   if (action === "q" || action === "interrupt") return { ...state, exit: true };
   if (action === "?") return { ...state, help: !state.help };
   if (state.help) return state;
+  if (action === "h")
+    return {
+      ...state,
+      sourcesOpen: !state.sourcesOpen,
+      sourcesScroll: 0,
+      collectors: state.sourcesOpen ? state.collectors : undefined,
+      sourcesError: undefined,
+      chartsOpen: false,
+      detailKey: undefined,
+    };
+  if (state.sourcesOpen) {
+    if (["up", "down", "pageup", "pagedown"].includes(action)) {
+      const limit = Math.max(0, sourceContent(state).length - (state.rows - 3));
+      const direction = action === "down" || action === "pagedown" ? 1 : -1;
+      const step = action.startsWith("page") ? 8 : 1;
+      return {
+        ...state,
+        sourcesScroll: Math.max(
+          0,
+          Math.min(limit, state.sourcesScroll + direction * step),
+        ),
+      };
+    }
+    return state;
+  }
   if (state.detailKey) {
     const limit = Math.max(0, detailContent(state).length - (state.rows - 3));
     const scroll = Math.min(state.detailScroll, limit);

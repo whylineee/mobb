@@ -7,6 +7,8 @@ import type {
   Session,
   Statistics,
   CodexLimits,
+  CollectorHealth,
+  StateSnapshot,
 } from "@agentwatch/shared";
 export type ConnectionOptions = { baseUrl: string; token: string };
 export class TuiClient {
@@ -85,6 +87,9 @@ export class TuiClient {
       this.request<EventPage>(`${path}/events`, signal),
     ]);
     return { session, events };
+  }
+  async sources(signal: AbortSignal): Promise<CollectorHealth[]> {
+    return (await this.request<StateSnapshot>("/api/state", signal)).collectors;
   }
   async watch(signal: AbortSignal, invalidate: () => void): Promise<void> {
     let backoff = 300;

@@ -52,6 +52,39 @@ function Dashboard({ options }: { options: Options }) {
     if (state.exit) exit();
   }, [state.exit, exit]);
   useEffect(() => {
+    if (!state.sourcesOpen) return;
+    const controller = new AbortController();
+    let busy = false;
+    const refresh = async () => {
+      if (busy) return;
+      busy = true;
+      try {
+        const collectors = await client.sources(controller.signal);
+        if (!controller.signal.aborted)
+          setState((current) => ({
+            ...current,
+            collectors,
+            sourcesError: undefined,
+          }));
+      } catch (error) {
+        if (!controller.signal.aborted)
+          setState((current) => ({
+            ...current,
+            sourcesError:
+              error instanceof Error ? error.message : "Дані недоступні",
+          }));
+      } finally {
+        busy = false;
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => void refresh(), 5000);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [client, state.sourcesOpen]);
+  useEffect(() => {
     const controller = new AbortController();
     let busy = false,
       lastRefresh = 0,

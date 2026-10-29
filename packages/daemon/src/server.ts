@@ -147,6 +147,16 @@ export function createApp(options: {
       observedAt: now,
     });
     for (const event of events) service.ingest(event);
+    if (events.length)
+      service.health({
+        id: `${provider.data}-hooks`,
+        provider: provider.data,
+        state: "ready",
+        message: "Отримано подію hook; поточний стан налаштування невідомий",
+        lastCheckedAt: now,
+        lastEventAt: now,
+        droppedEvents: null,
+      });
     options.onHook?.(provider.data, payload, ancestors);
     return c.json({ accepted: events.length }, 202);
   });

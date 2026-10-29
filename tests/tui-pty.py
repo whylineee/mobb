@@ -84,6 +84,15 @@ try:
                                "payload": {"session_id": "pty-parent", "hook_event_name": event, "cwd": "/fixtures/mobb", **extra}}, hook=True)
     key(a, b"r")
     wait_text(a, "pty-parent")
+    with open(os.path.join(home, "hook-failures.jsonl"), "w", encoding="utf-8") as failures:
+        failures.write('{"reason":"synthetic"}\n')
+    key(a, b"h")
+    wait_text(a, "СТАН МОНІТОРИНГУ")
+    wait_text(a, "codex-hooks")
+    wait_text(a, "hook-delivery")
+    wait_text(a, "недоставлених подій")
+    key(a, b"\x1b")
+    wait_text(a, "Огляд")
     key(a, b"?")
     wait_text(a, "Довідка")
     key(a, b"\x1b")
@@ -123,8 +132,12 @@ try:
     key(b, b"3")
     wait_text(b, "3 Токени:")
     old_pid = int(open(os.path.join(home, "daemon.lock")).read())
+    key(a, b"h")
+    wait_text(a, "СТАН МОНІТОРИНГУ")
     api("/api/daemon/stop", {})
     a[4] = b""
+    wait_text(a, "останні дані")
+    key(a, b"\x1b")
     wait_text(a, "OFFLINE")
     until = time.monotonic() + 3
     while os.path.exists(os.path.join(home, "daemon.lock")) and time.monotonic() < until:

@@ -23,6 +23,7 @@ export class FileCollectors {
   private tailer: JsonlTailer;
   private ready = new Map<Provider, boolean>();
   private dropped = new Map<Provider, number>();
+  private lastEvent = new Map<Provider, number>();
   private timer?: ReturnType<typeof setInterval>;
   private closed = false;
   private startedAt = Date.now();
@@ -77,6 +78,8 @@ export class FileCollectors {
       context.provider === "codex"
         ? normalizeCodexRecord(raw, meta)
         : normalizeClaudeRecord(raw, meta);
+    if (meta.live && events.length)
+      this.lastEvent.set(context.provider, meta.observedAt);
     for (const event of events) this.service.ingest(event);
   }
 
@@ -210,6 +213,7 @@ export class FileCollectors {
           ? "Транскрипти доступні; історичні записи не підтверджують відкритість"
           : "Транскриптів ще немає; hooks можуть передавати події незалежно",
         lastCheckedAt: Date.now(),
+        lastEventAt: this.lastEvent.get(provider),
         droppedEvents: this.dropped.get(provider) ?? 0,
       });
     }

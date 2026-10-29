@@ -200,7 +200,11 @@ export function SourceHealth({
             <span className={`collector-state collector-${collector.state}`}>
               {
                 {
-                  ready: "Готове",
+                  ready:
+                    collector.id.endsWith("-hooks") &&
+                    collector.lastEventAt !== undefined
+                      ? "Сигнал отримано"
+                      : "Готове",
                   unavailable: "Недоступне",
                   error: "Помилка",
                 }[collector.state]
@@ -209,10 +213,15 @@ export function SourceHealth({
           </h3>
           <p>{collector.message}</p>
           <dl className="office-stat-totals">
-            <div>
-              <dt>Перевірено</dt>
-              <dd>{relativeTime(collector.lastCheckedAt, now)}</dd>
-            </div>
+            {!(
+              collector.id.endsWith("-hooks") &&
+              collector.lastEventAt !== undefined
+            ) && (
+              <div>
+                <dt>Перевірено</dt>
+                <dd>{relativeTime(collector.lastCheckedAt, now)}</dd>
+              </div>
+            )}
             <div>
               <dt>Останній сигнал</dt>
               <dd>
@@ -221,10 +230,15 @@ export function SourceHealth({
                   : relativeTime(collector.lastEventAt, now)}
               </dd>
             </div>
-            <div>
-              <dt>Пропущено подій</dt>
-              <dd>{collector.droppedEvents}</dd>
-            </div>
+            {!(
+              collector.id.endsWith("-hooks") &&
+              collector.lastEventAt !== undefined
+            ) && (
+              <div>
+                <dt>Пропущено подій</dt>
+                <dd>{collector.droppedEvents ?? "Недоступно"}</dd>
+              </div>
+            )}
           </dl>
         </section>
       ))}

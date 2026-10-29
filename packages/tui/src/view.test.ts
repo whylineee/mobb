@@ -40,6 +40,113 @@ const detailState = (task: string): UiState => ({
     sources: ["hook"],
   } satisfies Session,
 });
+it("opens source health and shows observed signals and missing hook evidence", () => {
+  let state = reduceUi(initialState(), "h");
+  state = {
+    ...state,
+    online: true,
+    collectors: [
+      {
+        id: "codex-logs",
+        provider: "codex",
+        state: "ready",
+        message: "Транскрипти доступні",
+        lastCheckedAt: 1000,
+        lastEventAt: 1000,
+        droppedEvents: 2,
+      },
+    ],
+  };
+  const text = renderDashboard(state)
+    .map((line) => line.text)
+    .join("\n");
+  expect(text).toContain("СТАН МОНІТОРИНГУ");
+  expect(text).toContain("codex-logs");
+  expect(text).toContain("Пропущено: 2");
+  expect(text).toContain("codex-hooks: невідомо");
+  expect(reduceUi(state, "escape").sourcesOpen).toBe(false);
+});
+it("describes a received hook without asserting it is still running", () => {
+  const state: UiState = {
+    ...reduceUi(initialState(), "h"),
+    online: true,
+    collectors: [
+      {
+        id: "codex-hooks",
+        provider: "codex",
+        state: "ready",
+        message: "Поточний стан налаштування невідомий",
+        lastCheckedAt: 1000,
+        lastEventAt: 1000,
+        droppedEvents: 0,
+      },
+    ],
+  };
+  const text = renderDashboard(state)
+    .map((line) => line.text)
+    .join("\n");
+  expect(text).toContain("codex-hooks: Сигнал отримано");
+  expect(text).toContain("Поточний стан налаштування невідомий");
+  expect(text).not.toContain("Пропущено: 0");
+  expect(text).not.toContain("Перевірено:");
+});
+it("marks source data as stale when the health request fails", () => {
+  const state = {
+    ...reduceUi(initialState(), "h"),
+    sourcesError: "HTTP 500",
+    collectors: [
+      {
+        id: "processes",
+        state: "ready",
+        message: "ok",
+        lastCheckedAt: 1,
+        droppedEvents: 0,
+      },
+    ],
+  } satisfies UiState;
+  const text = renderDashboard(state)
+    .map((line) => line.text)
+    .join("\n");
+  expect(text).toContain("останні дані");
+  expect(text).toContain("HTTP 500");
+});
+it("does not claim cached source data exists when the first request fails", () => {
+  const state = { ...reduceUi(initialState(), "h"), sourcesError: "HTTP 500" };
+  const text = renderDashboard(state)
+    .map((line) => line.text)
+    .join("\n");
+  expect(text).toContain("Дані про джерела недоступні");
+  expect(text).not.toContain("останні дані");
+});
+it("scrolls through source health without moving the agent selection", () => {
+  const selected = row("agent");
+  let state: UiState = {
+    ...reduceUi(
+      { ...initialState(), agents: [selected], selectedKey: selected.key },
+      "h",
+    ),
+    online: true,
+    collectors: Array.from({ length: 12 }, (_, i) => ({
+      id: `source-${i}`,
+      state: "ready" as const,
+      message: "ok",
+      lastCheckedAt: Date.now(),
+      droppedEvents: 0,
+    })),
+  };
+  expect(
+    renderDashboard(state)
+      .map((line) => line.text)
+      .join("\n"),
+  ).not.toContain("source-11");
+  for (let i = 0; i < 10; i++) state = reduceUi(state, "pagedown");
+  expect(
+    renderDashboard(state)
+      .map((line) => line.text)
+      .join("\n"),
+  ).toContain("source-11");
+  expect(state.selectedKey).toBe("agent");
+});
 it("scrolls up immediately after repeated attempts to scroll past the end", () => {
   let state = detailState("x".repeat(80 * 40));
   for (let i = 0; i < 20; i++) state = reduceUi(state, "pagedown");

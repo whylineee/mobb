@@ -2,6 +2,39 @@ import { expect, it, vi } from "vitest";
 import { createServer } from "node:http";
 import { setTimeout as realDelay } from "node:timers/promises";
 import { TuiClient } from "./client.js";
+it("reads source health from the authenticated state endpoint", async () => {
+  const server = createServer((req, res) => {
+    expect(req.url).toBe("/api/state");
+    expect(req.headers.authorization).toBe("Bearer local-test");
+    res.end(
+      JSON.stringify({
+        collectors: [
+          {
+            id: "codex-logs",
+            state: "ready",
+            message: "ok",
+            lastCheckedAt: 100,
+            droppedEvents: 0,
+          },
+        ],
+      }),
+    );
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  try {
+    const address = server.address() as { port: number };
+    const client = new TuiClient({
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      token: "local-test",
+    });
+    expect(await client.sources(new AbortController().signal)).toMatchObject([
+      { id: "codex-logs", state: "ready" },
+    ]);
+  } finally {
+    server.closeAllConnections();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+});
 it("loads paginated agents and coalesces ancestor context", async () => {
   const requests: string[] = [];
   const server = createServer((req, res) => {

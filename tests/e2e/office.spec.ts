@@ -602,9 +602,14 @@ test("task board tracks current sessions and shares counters with statistics", a
   ).toBeFocused();
   await expect(page.getByTestId("task-board")).toBeVisible();
   await page.getByRole("button", { name: "Стан джерел", exact: true }).click();
-  await expect(page.locator("#office-sources")).toContainText(
-    "Дані про джерела поки недоступні",
+  const hookHealth = page
+    .locator("#office-sources .collector-health")
+    .filter({ hasText: "codex-hooks" });
+  await expect(hookHealth).toContainText("Сигнал отримано");
+  await expect(hookHealth).toContainText(
+    "поточний стан налаштування невідомий",
   );
+  await expect(hookHealth).not.toContainText("Пропущено подій");
   await page.getByRole("button", { name: "Офіс", exact: true }).click();
   await expect(page.locator(".office-tool-panel")).toHaveCount(0);
 });

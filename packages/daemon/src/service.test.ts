@@ -158,6 +158,40 @@ describe("private local API", () => {
     const service = make();
     return { config, service, app: createApp({ config, service }) };
   };
+  it("records a hook signal only after a supported hook is received", async () => {
+    const { app, config, service } = setup();
+    expect(
+      service.snapshot().collectors.find((c) => c.id === "codex-hooks"),
+    ).toBeUndefined();
+    const now = Date.now();
+    const response = await app.request(
+      "http://127.0.0.1:4317/api/hooks/codex",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${config.hookToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          eventId: "health-hook",
+          occurredAt: now,
+          payload: {
+            session_id: "s1",
+            hook_event_name: "UserPromptSubmit",
+            prompt: "hello",
+          },
+        }),
+      },
+    );
+    expect(response.status).toBe(202);
+    expect(
+      service.snapshot().collectors.find((c) => c.id === "codex-hooks"),
+    ).toMatchObject({
+      state: "ready",
+      lastEventAt: expect.any(Number),
+      droppedEvents: null,
+    });
+  });
   it("generates stable separate credentials with private filesystem permissions", () => {
     const path = home(),
       c = loadConfig(path);

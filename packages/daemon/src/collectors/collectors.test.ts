@@ -199,6 +199,10 @@ it("recovers a real rollout as unknown, then processes new file activity live", 
       .poll(() => service.get("codex:existing")?.lifecycle)
       .toBe("unknown");
     expect(service.events("codex:existing").events).toHaveLength(1);
+    expect(
+      service.snapshot().collectors.find((c) => c.id === "codex-logs")
+        ?.lastEventAt,
+    ).toBeUndefined();
     appendFileSync(
       path,
       record("event_msg", { type: "task_started", turn_id: "live" }),
@@ -206,6 +210,14 @@ it("recovers a real rollout as unknown, then processes new file activity live", 
     await expect
       .poll(() => service.get("codex:existing")?.lifecycle)
       .toBe("open");
+    await expect
+      .poll(
+        () =>
+          service.snapshot().collectors.find((c) => c.id === "codex-logs")
+            ?.lastEventAt,
+        { timeout: 8000 },
+      )
+      .toBeTypeOf("number");
     appendFileSync(
       path,
       record("event_msg", { type: "task_complete", turn_id: "live" }),

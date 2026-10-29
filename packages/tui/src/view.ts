@@ -477,7 +477,7 @@ function wideDashboard(state: UiState): FrameLine[] {
     line(
       state.error
         ? `Помилка: ${state.error}`
-        : "↑↓ агент · ←→ дерево · Enter деталі · / пошук · t/p/j/s фільтри · 1/2/3 графіки · ? · q",
+        : "↑↓ агент · ←→ дерево · Enter деталі · / пошук · h стан · t/p/j/s фільтри · ? · q",
       "gray",
     ),
   );
@@ -504,6 +504,75 @@ function wrap(value: string, width: number): string[] {
   return [...chunks, chunk];
 }
 
+export function sourceContent(state: UiState): FrameLine[] {
+  const out: FrameLine[] = [];
+  if (state.sourcesError)
+    out.push(
+      line(
+        `Помилка: ${state.sourcesError}${state.collectors ? " · останні дані" : ""}`,
+        "yellow",
+      ),
+    );
+  else if (!state.online)
+    out.push(
+      line(
+        `Демон недоступний${state.collectors ? " · останні дані" : ""}`,
+        "yellow",
+      ),
+    );
+  if (!state.collectors) {
+    out.push(
+      line(
+        state.sourcesError ? "Дані про джерела недоступні" : "Завантаження…",
+      ),
+    );
+    return out;
+  }
+  const collectors = state.collectors;
+  for (const provider of ["codex", "claude"])
+    if (!collectors.some((c) => c.id === `${provider}-hooks`))
+      out.push(
+        line(
+          `${provider}-hooks: невідомо · підтверджених сигналів немає`,
+          "yellow",
+        ),
+      );
+  if (!collectors.some((c) => c.id === "hook-delivery"))
+    out.push(line("Помилки доставки hooks: дані недоступні", "gray"));
+  if (!collectors.length) out.push(line("Дані про джерела поки недоступні"));
+  for (const collector of collectors) {
+    const status = {
+      ready: collector.id.endsWith("-hooks") ? "Сигнал отримано" : "Готове",
+      unavailable: "Недоступне",
+      error: "Помилка",
+    }[collector.state];
+    out.push(
+      line(
+        `${collector.id}: ${status}`,
+        collector.state === "ready" ? "green" : "yellow",
+        true,
+      ),
+    );
+    for (const part of wrap(clean(collector.message), state.columns))
+      out.push(line(part));
+    const checked = age(collector.lastCheckedAt, Date.now());
+    const signal =
+      collector.lastEventAt === undefined
+        ? "недоступно"
+        : age(collector.lastEventAt, Date.now());
+    const dropped = collector.id.endsWith("-hooks")
+      ? ""
+      : ` · Пропущено: ${collector.droppedEvents ?? "недоступно"}`;
+    out.push(
+      line(
+        `${collector.id.endsWith("-hooks") ? "" : `Перевірено: ${checked} · `}Останній сигнал: ${signal}${dropped}`,
+        "gray",
+      ),
+    );
+  }
+  return out;
+}
+
 export function renderDashboard(state: UiState): FrameLine[] {
   const { columns: width, rows: height } = state;
   let out: FrameLine[] = [];
@@ -526,6 +595,7 @@ export function renderDashboard(state: UiState): FrameLine[] {
         "r               скинути фільтри та пошук",
         "1 / 2 / 3       токени / працюючі / розбивка",
         "g               відкрити / закрити графіки",
+        "h               стан джерел моніторингу",
         "b               розбивка: проєкт / провайдер / модель",
         "Tab             фокус таблиці / графіків",
         "Esc             закрити деталі або довідку",
@@ -538,7 +608,19 @@ export function renderDashboard(state: UiState): FrameLine[] {
         "Зупинка монітора: agentwatch stop",
       ].map((t) => line(t)),
     ];
-  else if (state.detailKey) out = detailLines(state);
+  else if (state.sourcesOpen) {
+    const content = sourceContent(state),
+      heightAvailable = height - 3;
+    const offset = Math.min(
+      state.sourcesScroll,
+      Math.max(0, content.length - heightAvailable),
+    );
+    out = [
+      line("AgentWatch / СТАН МОНІТОРИНГУ", "cyan", true),
+      ...content.slice(offset, offset + heightAvailable),
+      line("↑↓ / PgUp/PgDn · h / Esc назад · q вихід", "gray"),
+    ];
+  } else if (state.detailKey) out = detailLines(state);
   else if (state.chartsOpen) {
     const chartHeight = Math.max(6, height - 5);
     out = [
@@ -703,7 +785,7 @@ export function renderDashboard(state: UiState): FrameLine[] {
       line(
         state.error
           ? `Помилка: ${state.error}`
-          : "↑↓ вибір · Enter деталі · g графіки · / пошук · t/p/j/s фільтри · ? · q",
+          : "↑↓ вибір · Enter деталі · g графіки · h стан · / пошук · ? · q",
         "gray",
       ),
     );

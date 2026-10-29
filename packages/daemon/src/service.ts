@@ -277,7 +277,9 @@ export class AgentService {
     const result = this.analytics.statistics(query);
     if (
       [...this.collectors.values()].some(
-        (c) => c.state !== "ready" || c.droppedEvents > 0,
+        (c) =>
+          c.state !== "ready" ||
+          (c.droppedEvents !== null && c.droppedEvents > 0),
       )
     ) {
       result.coverage.partial = true;
