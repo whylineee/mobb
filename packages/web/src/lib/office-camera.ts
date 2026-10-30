@@ -1,4 +1,5 @@
 import { Vector3 } from "three";
+import { OFFICE } from "./office-space";
 
 export type SceneInsets = {
   left: number;
@@ -24,16 +25,16 @@ function floorOffset(x: number, y: number) {
 export function officeCameraLayout(
   width: number,
   height: number,
-  rows: number,
   insets: SceneInsets,
 ) {
-  const depth = Math.max(20, rows * 3.25 + 3);
-  const points = [-13.2, 13.2].flatMap((x) =>
-    [-0.65, 4.1].flatMap((y) =>
-      [-depth / 2 - 0.2, depth / 2 + 0.2].map(
-        (z) => new Vector3(x, y - 0.8, z),
+  const depth = OFFICE.depth;
+  const points = [-OFFICE.width / 2 - 0.2, OFFICE.width / 2 + 0.2].flatMap(
+    (x) =>
+      [-0.65, OFFICE.height + 0.2].flatMap((y) =>
+        [-depth / 2 - 0.2, depth / 2 + 0.2].map(
+          (z) => new Vector3(x, y - 0.8, z),
+        ),
       ),
-    ),
   );
   const xs = points.map((point) => point.dot(right));
   const ys = points.map((point) => point.dot(up));
@@ -62,15 +63,18 @@ export function clampOfficeCenter(
   center: Vector3,
   zoom: number,
   baseZoom: number,
-  depth: number,
 ) {
   const fraction = Math.max(0, Math.min(1, 1 - baseZoom / zoom));
   if (fraction === 0) return center.set(0, 0.8, 0);
-  center.x = Math.max(-13 * fraction, Math.min(13 * fraction, center.x));
+  const halfWidth = OFFICE.width / 2;
+  center.x = Math.max(
+    -halfWidth * fraction,
+    Math.min(halfWidth * fraction, center.x),
+  );
   center.y = 0.8;
   center.z = Math.max(
-    (-depth / 2) * fraction,
-    Math.min((depth / 2) * fraction, center.z),
+    (-OFFICE.depth / 2) * fraction,
+    Math.min((OFFICE.depth / 2) * fraction, center.z),
   );
   return center;
 }

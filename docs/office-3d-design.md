@@ -1,13 +1,29 @@
 # Fixed-angle office and live monitoring panels
 
-The cutaway office uses a raised central work deck, server racks, a glass collaboration pod, a lounge platform and a console wing. Decorative wall displays do not represent live telemetry. Room expansion remains tied to the seat grid.
-Visible sessions are arranged in deterministic project groups; project directory
-distinguishes names when available. Explicit parent-child relationships between
-visible sessions are drawn as lines; ambiguous or ended links are omitted.
-Compact labels show the project, current action and known turn duration; above
-eight agents they collapse to markers to keep the scene legible. Confirmed
-attention adds a pulse and a task-board count, respecting reduced motion. Linear lights use visible wall
-cantilevers, crossbars and short hangers, with no ceiling covering the room.
+The cutaway office is a permanent, daylight coworking space on a 30 by 26
+floor plate. Three four-seat work islands and one two-seat island provide
+fourteen fixed workstations, with wide aisles between muted rugs. Light oak
+flooring, warm white walls, tall rear windows, a small glass meeting room and
+wall-side lounge/coffee storage keep the center open. Each desk has one monitor;
+there are no server racks, mission displays or suspended light structures.
+All furniture remains present in the empty office.
+
+`lib/office-space.ts` owns the room dimensions and fourteen seat coordinates;
+room furniture, seat allocation and camera bounds share that plan. Initial
+allocation sorts known project locations (falling back to project names) and
+session keys. During the mounted office lifetime, arrivals, departures and
+project updates preserve existing agents' seats; new sessions take free places.
+More than fourteen visible sessions do not enlarge the room or evict seated
+agents. A Ukrainian capacity notice discloses the count; all sessions remain
+available in the agent list, task board and counters. An overflow session takes
+a released seat automatically. Selecting an unseated session opens its details
+without inventing a 3D location.
+
+Explicit parent-child relationships between seated sessions are drawn as lines;
+ambiguous or ended links are omitted. Compact labels show the project, current
+action and known turn duration; above eight agents they collapse to markers to
+keep the scene legible. Confirmed attention adds a pulse and a task-board count,
+respecting reduced motion.
 
 The orthographic camera keeps the existing isometric angle at every viewport.
 Drag pans along the floor, wheel/pinch and buttons zoom, and reset shows the
@@ -47,7 +63,8 @@ The accessible agent list remains the WebGL fallback. Existing authentication,
 text redaction, bounded summaries, full-detail loading, SSE resync, native pixel
 density and adaptive geometry/shadows remain in place.
 
-Target viewports are 1440x1000 and 390x844. Validate camera fit and constraints,
+Target viewports are 1440x1000 and 390x844. Verify the fixed floor plan with
+0, 1, 7 and 14 agents, stable seat placement and overflow beyond fourteen. Validate camera fit and constraints,
 edge-agent focus between panels, keyboard focus restoration, task transitions,
 partial/missing telemetry, offline/reconnect, authentication and WebGL fallback.
 Capture rendered office, board and monitoring states after a production build.

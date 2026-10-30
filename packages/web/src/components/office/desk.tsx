@@ -6,6 +6,7 @@ import { sessionStatus, type Session } from "@agentwatch/shared";
 import { agentName, STATUS_LABELS } from "../Status";
 import { AgentMascot } from "../AgentMascot";
 import { Box, type Seat } from "./primitives";
+import { Chair } from "./furniture";
 function WorkLabel({ session }: { session: Session }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -83,7 +84,7 @@ export const Desk = memo(function Desk({
         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.08, 0.25]}>
           <ringGeometry args={[1.25, 1.33, 40]} />
           <meshBasicMaterial
-            color={selected ? "#a4f0ce" : "#8eaa9c"}
+            color={selected ? "#397b67" : "#718d7b"}
             transparent
             opacity={selected ? 0.9 : 0.35}
           />
@@ -93,14 +94,14 @@ export const Desk = memo(function Desk({
         <Box
           position={[0, 1.17, -0.22]}
           size={[2.55, 0.16, 1.65]}
-          color="#667e8d"
+          color="#d4b58b"
           rounded
         />
         <Box
           position={[0, 1.08, 0.61]}
           size={[2.2, 0.025, 0.025]}
-          color="#51c9d7"
-          emissive="#51c9d7"
+          color="#b5966e"
+          emissive="#b5966e"
         />
         {[-1.02, 1.02].flatMap((x) =>
           [-0.8, 0.4].map((z) => (
@@ -108,31 +109,31 @@ export const Desk = memo(function Desk({
               key={`${x}:${z}`}
               position={[x, 0.57, z]}
               size={[0.09, 1.12, 0.09]}
-              color="#304958"
+              color="#8b9388"
             />
           )),
         )}
         <Box
           position={[0, 1.39, -0.65]}
           size={[0.1, 0.35, 0.1]}
-          color="#243a49"
+          color="#6a756e"
         />
         <Box
           position={[0, 1.27, -0.65]}
           size={[0.55, 0.05, 0.3]}
-          color="#243a49"
+          color="#6a756e"
           rounded
         />
         <Box
           position={[0, 1.77, -0.65]}
           size={[1.17, 0.74, 0.09]}
-          color="#152b39"
+          color="#384b49"
           rounded
         />
         <Box
           position={[0, 1.78, -0.592]}
           size={[1.04, 0.61, 0.02]}
-          color="#183e50"
+          color="#294d55"
           emissive={screen}
           emissiveIntensity={status === "ended" ? 0.02 : 0.23}
         />
@@ -146,74 +147,19 @@ export const Desk = memo(function Desk({
             emissiveIntensity={0.3}
           />
         ))}
-        {/* A secondary vertical screen and workstation tower distinguish each station. */}
-        <Box
-          position={[0.79, 1.65, -0.62]}
-          size={[0.48, 0.74, 0.09]}
-          color="#152b39"
-          rounded
-        />
-        <Box
-          position={[0.79, 1.65, -0.565]}
-          size={[0.38, 0.62, 0.02]}
-          color="#246077"
-          emissive="#246077"
-        />
-        {[0, 1, 2].map((i) => (
-          <Box
-            key={`secondary-${i}`}
-            position={[0.79, 1.83 - i * 0.15, -0.55]}
-            size={[0.24, 0.025, 0.012]}
-            color={screen}
-            emissive={screen}
-          />
-        ))}
-        <Box
-          position={[0.9, 0.4, -0.35]}
-          size={[0.42, 0.75, 0.65]}
-          color="#1b3545"
-          rounded
-        />
-        <Box
-          position={[0.9, 0.42, -0.01]}
-          size={[0.22, 0.4, 0.02]}
-          color="#4ac7d4"
-          emissive="#4ac7d4"
-        />
         <Box
           position={[0, 1.28, 0.14]}
           size={[0.8, 0.035, 0.32]}
-          color="#748c99"
+          color="#d3d7cc"
           rounded
         />
         <Box
           position={[0.92, 1.36, -0.3]}
           size={[0.16, 0.22, 0.16]}
-          color={session?.provider === "codex" ? "#68bfca" : "#c29175"}
+          color={session?.provider === "codex" ? "#86a79a" : "#bd9776"}
           rounded
         />
-        <Box
-          position={[0, 0.55, 0.95]}
-          size={[0.85, 0.15, 0.8]}
-          color="#385668"
-          rounded
-        />
-        <Box
-          position={[0, 0.22, 0.95]}
-          size={[0.1, 0.5, 0.1]}
-          color="#243d4b"
-        />
-        <Box
-          position={[0, 1.03, 1.32]}
-          size={[0.8, 0.8, 0.12]}
-          color="#385668"
-          rounded
-        />
-        <Box
-          position={[0, 0.17, 0.95]}
-          size={[0.8, 0.07, 0.12]}
-          color="#243d4b"
-        />
+        <Chair position={[0, 0, 0.95]} color="#85968a" />
       </group>
       {session && (
         <group position={[0, 0.23, -0.7]} scale={0.85}>

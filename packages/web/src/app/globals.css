@@ -2020,7 +2020,7 @@ kbd {
   height: 100dvh;
   overflow: hidden;
   isolation: isolate;
-  background: #65766c;
+  background: #e6e4df;
 }
 .office-stage {
   position: absolute;
@@ -2667,11 +2667,35 @@ kbd {
   white-space: nowrap;
   padding: 3px 7px;
   border-radius: 4px;
-  background: #e3d3aee8;
+  background: #f5f1e7ed;
   color: #38483b;
   font-size: 10px;
   font-weight: 700;
   pointer-events: none;
+}
+.office-capacity {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  width: max-content;
+  max-width: min(440px, calc(100% - 180px));
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid #c9d0c2;
+  border-radius: 12px;
+  background: #fbf8f0f5;
+  color: #354b3e;
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+@media (max-width: 1000px) {
+  .office-capacity {
+    top: 120px;
+    max-width: calc(100% - 36px);
+  }
 }
 .office-rail button {
   position: relative;

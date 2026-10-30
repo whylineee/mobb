@@ -5,14 +5,15 @@ import {
   clampOfficeCenter,
   officeCameraLayout,
 } from "./office-camera";
+import { OFFICE } from "./office-space";
 
 it.each([
-  [1440, 1000, 4],
-  [390, 844, 4],
-  [1440, 1000, 15],
-])("fits the whole expanded room at %sx%s (%s rows)", (width, height, rows) => {
+  [1440, 1000],
+  [390, 844],
+  [702, 762],
+])("fits the permanent room at %sx%s", (width, height) => {
   const insets = { left: 80, right: 80, top: 48, bottom: 100 };
-  const layout = officeCameraLayout(width, height, rows, insets);
+  const layout = officeCameraLayout(width, height, insets);
   const camera = new OrthographicCamera(
     -width / 2,
     width / 2,
@@ -27,8 +28,8 @@ it.each([
   camera.zoom = layout.baseZoom;
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
-  for (const x of [-13, 13])
-    for (const y of [-0.62, 3.8])
+  for (const x of [-OFFICE.width / 2, OFFICE.width / 2])
+    for (const y of [-0.62, OFFICE.height])
       for (const z of [-layout.depth / 2, layout.depth / 2]) {
         const point = new Vector3(x, y, z).project(camera);
         const screenX = ((point.x + 1) * width) / 2,
@@ -44,11 +45,11 @@ it("locks panning at minimum zoom and bounds all directions on zoom", () => {
   for (const x of [-10000, 10000])
     for (const z of [-10000, 10000]) {
       expect(
-        clampOfficeCenter(new Vector3(x, 99, z), 20, 20, 20).toArray(),
+        clampOfficeCenter(new Vector3(x, 99, z), 20, 20).toArray(),
       ).toEqual([0, 0.8, 0]);
-      const center = clampOfficeCenter(new Vector3(x, 99, z), 80, 20, 20);
-      expect(Math.abs(center.x)).toBeLessThan(13);
-      expect(Math.abs(center.z)).toBeLessThan(10);
+      const center = clampOfficeCenter(new Vector3(x, 99, z), 80, 20);
+      expect(Math.abs(center.x)).toBeLessThan(OFFICE.width / 2);
+      expect(Math.abs(center.z)).toBeLessThan(OFFICE.depth / 2);
       expect(center.y).toBe(0.8);
     }
 });
@@ -57,7 +58,7 @@ it("centers a selected agent in the free viewport between asymmetric panels", ()
   const width = 1440,
     height = 1000;
   const insets = { left: 640, right: 456, top: 48, bottom: 100 };
-  const layout = officeCameraLayout(width, height, 4, insets);
+  const layout = officeCameraLayout(width, height, insets);
   const zoom = layout.baseZoom * 1.65;
   const center = new Vector3(4, 0.8, 2);
   const target = center.clone().add(layout.offset(zoom));

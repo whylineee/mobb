@@ -36,6 +36,14 @@ const renderedScene = async (page: Page) => {
       (window as unknown as { __agentwatchPerformance?: { frames: number } })
         .__agentwatchPerformance?.frames! >= 1,
   );
+  // HTML labels can commit before the demand-rendered instance buffers. Let
+  // the browser paint the updated scene before capturing its visual state.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      }),
+  );
 };
 // Two FPS samples are enough for the adaptive-quality monitor to react. Waiting
 // for a fixed frame count makes this check depend on the runner's render speed.
@@ -145,12 +153,18 @@ test("open sessions stay in the office between turns", async ({
 test.describe("compact markers and sharp Retina rendering", () => {
   test.use({ viewport: { width: 702, height: 762 }, deviceScaleFactor: 2 });
 
-  test("twenty markers leave the office visible", async ({ page, request }) => {
+  test("fourteen seated markers leave the office visible with overflow disclosed", async ({
+    page,
+    request,
+  }) => {
     for (let i = 0; i < 20; i++)
       await hook(request, `compact-${i}`, "UserPromptSubmit");
     await page.goto(`/#token=${UI_TOKEN}`);
     const markers = page.getByTestId("robot-label");
-    await expect(markers).toHaveCount(20);
+    await expect(markers).toHaveCount(14);
+    await expect(
+      page.getByRole("status").filter({ hasText: "У 3D-офісі" }),
+    ).toContainText("14 із 20");
     const bounds = await markers.evaluateAll((items) =>
       items.map((item) => {
         const { x, y, width, height } = item.getBoundingClientRect();
@@ -188,7 +202,7 @@ test.describe("compact markers and sharp Retina rendering", () => {
     for (let i = 0; i < 20; i++)
       await hook(request, `sharp-${i}`, "UserPromptSubmit");
     await page.goto(`/#token=${UI_TOKEN}`);
-    await expect(page.getByTestId("robot-label")).toHaveCount(20);
+    await expect(page.getByTestId("robot-label")).toHaveCount(14);
     const canvas = page.locator("canvas");
     await expect(canvas).toHaveJSProperty("clientWidth", 702);
     await expect(canvas).toHaveJSProperty("width", 1404);
@@ -198,6 +212,69 @@ test.describe("compact markers and sharp Retina rendering", () => {
     await expect(canvas).toHaveJSProperty("height", 1524);
     await page.screenshot({ path: "test-results/office-sharp-retina.png" });
   });
+});
+
+test("permanent coworking keeps its desks and occupied positions as the team changes", async ({
+  page,
+  request,
+}) => {
+  await page.goto(`/#token=${UI_TOKEN}`);
+  await renderedScene(page);
+  const office = page.getByTestId("office-canvas");
+  await expect(office).toHaveAttribute("data-seat-count", "14");
+  await expect(page.getByTestId("robot-label")).toHaveCount(0);
+  await page.screenshot({ path: "test-results/coworking-empty.png" });
+  await hook(request, "stable-00", "UserPromptSubmit");
+  const first = page.getByRole("button", {
+    name: "Вибрати Codex stable-00",
+    exact: true,
+  });
+  await expect(first).toBeVisible();
+  const original = (await first.boundingBox())!;
+  const center = {
+    x: original.x + original.width / 2,
+    y: original.y + original.height / 2,
+  };
+  await renderedScene(page);
+  await page.screenshot({ path: "test-results/coworking-one.png" });
+  for (const count of [7, 14]) {
+    for (let i = count === 7 ? 1 : 7; i < count; i++)
+      await hook(
+        request,
+        `stable-${String(i).padStart(2, "0")}`,
+        "UserPromptSubmit",
+      );
+    await expect(page.getByTestId("robot-label")).toHaveCount(count);
+    await expect
+      .poll(async () => {
+        const box = (await first.boundingBox())!;
+        return Math.hypot(
+          box.x + box.width / 2 - center.x,
+          box.y + box.height / 2 - center.y,
+        );
+      })
+      .toBeLessThan(1);
+    await expect(office).toHaveAttribute("data-seat-count", "14");
+    await renderedScene(page);
+    await page.screenshot({ path: `test-results/coworking-${count}.png` });
+  }
+  await hook(request, "overflow", "UserPromptSubmit");
+  await expect(
+    page.getByRole("status").filter({ hasText: "У 3D-офісі" }),
+  ).toContainText("14 із 15");
+  await page.getByRole("button", { name: "Список", exact: true }).click();
+  await page.getByTestId("session-codex:overflow").click();
+  await expect(page.getByTestId("session-panel")).toContainText("overflow");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Офіс", exact: true }).click();
+  await hook(request, "stable-00", "SessionEnd");
+  await expect(first).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Вибрати Codex overflow", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "У 3D-офісі" }),
+  ).toHaveCount(0);
 });
 
 test("empty office and accessible fallback do not require external requests", async ({
@@ -442,7 +519,7 @@ test("ended robots disappear immediately while their drawer stays open", async (
   await expect(page.getByTestId("session-panel")).toContainText("alpha");
 });
 
-test("renders twenty mascot agents within the animation budget and allows selection", async ({
+test("renders fourteen seated mascots within the animation budget with twenty sessions", async ({
   page,
   request,
 }) => {
@@ -457,7 +534,7 @@ test("renders twenty mascot agents within the animation budget and allows select
     );
   await page.goto(`/#token=${UI_TOKEN}`);
   await expect(page.locator("canvas")).toBeVisible();
-  await expect(page.getByTestId("robot-label")).toHaveCount(20, {
+  await expect(page.getByTestId("robot-label")).toHaveCount(14, {
     timeout: 15000,
   });
   await sampledScene(page);
@@ -473,7 +550,10 @@ test("renders twenty mascot agents within the animation budget and allows select
         }
       ).__agentwatchPerformance,
   );
-  console.log("20-session office benchmark:", JSON.stringify(performance));
+  console.log(
+    "14-seat / 20-session office benchmark:",
+    JSON.stringify(performance),
+  );
   expect(performance.animationFps).toBe(20);
   // FPS is reported, but a shared software-rendering runner cannot guarantee a
   // hardware-independent minimum. Liveness and the render-call cap still apply.
@@ -659,14 +739,14 @@ test("edge agent focus remains between panels after viewport changes", async ({
   page,
   request,
 }) => {
-  for (let i = 0; i < 20; i++)
+  for (let i = 0; i < 14; i++)
     await hook(request, `edge-${i}`, "UserPromptSubmit");
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto(`/#token=${UI_TOKEN}`);
   await page.getByRole("button", { name: "Таскборд", exact: true }).click();
-  await page.getByTestId("task-codex:edge-19").click();
+  await page.getByTestId("task-codex:edge-13").click();
   const marker = page.getByRole("button", {
-    name: "Вибрати Codex edge-19",
+    name: "Вибрати Codex edge-13",
     exact: true,
   });
   await expect(page.getByTestId("session-panel")).toBeVisible();

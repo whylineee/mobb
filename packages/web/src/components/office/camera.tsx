@@ -15,25 +15,22 @@ export function CameraRig({
   focus,
   action,
   reduced,
-  rows,
   insets,
   resetId,
 }: {
   focus: Seat | undefined;
   action: { type: string; id: number };
   reduced: boolean;
-  rows: number;
   insets: SceneInsets;
   resetId: number;
 }) {
   const { camera, size, invalidate } = useThree();
   const controls = useRef<Controls | null>(null);
   const layout = useMemo(
-    () => officeCameraLayout(size.width, size.height, rows, insets),
+    () => officeCameraLayout(size.width, size.height, insets),
     [
       size.width,
       size.height,
-      rows,
       insets.left,
       insets.right,
       insets.top,
@@ -54,7 +51,7 @@ export function CameraRig({
       );
       appliedZoom.current = camera.zoom;
       logical.current.copy(
-        clampOfficeCenter(center, camera.zoom, layout.baseZoom, layout.depth),
+        clampOfficeCenter(center, camera.zoom, layout.baseZoom),
       );
       const target = logical.current.clone().add(layout.offset(camera.zoom));
       controls.current?.target.copy(target);
@@ -103,7 +100,6 @@ export function CameraRig({
       destination.center.clone(),
       destination.zoom,
       layout.baseZoom,
-      layout.depth,
     );
     const alpha = reduced ? 1 : 1 - Math.exp(-delta * 7);
     apply(

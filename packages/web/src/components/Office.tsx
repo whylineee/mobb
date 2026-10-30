@@ -4,6 +4,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -19,6 +20,7 @@ import { MascotInstances } from "./AgentMascot";
 import { SceneFrames } from "./SceneFrames";
 import { sameSceneSessions } from "../lib/scene-sessions";
 import { officeLayout } from "../lib/office-layout";
+import { OFFICE_SEATS } from "../lib/office-space";
 import { HOME, type SceneInsets } from "../lib/office-camera";
 import {
   SolidInstances,
@@ -78,24 +80,24 @@ const Office = memo(
       [geometry, softGeometry],
     );
     const pointer = useRef({ x: 0, y: 0, dragged: false });
-    const { seats, zones, links, rows } = useMemo(
-      () => officeLayout(props.sessions),
+    const previousSeats = useRef<ReadonlyMap<string, Seat>>(new Map());
+    const { seats, zones, links, overflow } = useMemo(
+      () => officeLayout(props.sessions, previousSeats.current),
       [props.sessions],
     );
+    useLayoutEffect(() => {
+      previousSeats.current = seats;
+    }, [seats]);
     const occupied = new Map(
-      props.sessions.map((s) => {
-        const seat = seats.get(s.key)!;
-        return [`${seat[0]}:${seat[2]}`, s] as const;
+      props.sessions.flatMap((s) => {
+        const seat = seats.get(s.key);
+        return seat ? [[seat, s] as const] : [];
       }),
     );
-    const furniture = Array.from({ length: rows * 4 }, (_, i) => {
-      const seat: Seat = [
-        -5.2 + (i % 4) * 3.4,
-        0,
-        -5.9 + Math.floor(i / 4) * 3.25,
-      ];
-      return { seat, session: occupied.get(`${seat[0]}:${seat[2]}`) };
-    });
+    const furniture = OFFICE_SEATS.map((seat) => ({
+      seat,
+      session: occupied.get(seat),
+    }));
     const setCamera = (type: string) =>
       setAction((a) => ({ type, id: a.id + 1 }));
     return (
@@ -103,6 +105,7 @@ const Office = memo(
         <div
           className={`office-canvas ${props.sessions.length > 8 ? "office-dense" : ""}`}
           data-testid="office-canvas"
+          data-seat-count={OFFICE_SEATS.length}
           onPointerDown={(e) => {
             pointer.current = { x: e.clientX, y: e.clientY, dragged: false };
           }}
@@ -132,25 +135,26 @@ const Office = memo(
               if (!pointer.current.dragged) props.onSelect(null);
             }}
           >
-            <color attach="background" args={["#263a49"]} />
-            <hemisphereLight args={["#d1eaf1", "#47566a", 2]} />
-            <ambientLight intensity={0.45} color="#d6e9f4" />
+            <color attach="background" args={["#e6e4df"]} />
+            <hemisphereLight args={["#fff8e9", "#a3ae9d", 1.8]} />
+            <ambientLight intensity={0.5} color="#fff6e7" />
             <directionalLight
-              position={[3, 18, -5]}
-              intensity={3.2}
-              color="#d9efff"
+              position={[2, 18, -10]}
+              intensity={2.3}
+              color="#fff1d8"
               castShadow={shadows}
               shadow-mapSize={[1024, 1024]}
-              shadow-camera-left={-15}
-              shadow-camera-right={15}
-              shadow-camera-top={15}
-              shadow-camera-bottom={-15}
+              shadow-camera-left={-23}
+              shadow-camera-right={23}
+              shadow-camera-top={23}
+              shadow-camera-bottom={-23}
+              shadow-radius={3}
               shadow-bias={-0.001}
             />
             <directionalLight
               position={[-8, 8, -6]}
               intensity={0.6}
-              color="#63b9d4"
+              color="#d7e6ef"
             />
             <Suspense fallback={null}>
               <SolidInstances
@@ -182,7 +186,7 @@ const Office = memo(
                         <cylinderGeometry args={[0.29, 0.23, 0.5, 8]} />
                         <meshLambertMaterial />
                         <MascotInstances shadows={shadows}>
-                          <Room rows={rows} shadows={shadows} />
+                          <Room shadows={shadows} />
                           {zones.map((zone) => (
                             <Html
                               key={zone.key}
@@ -206,7 +210,7 @@ const Office = memo(
                                 [link.parent[0], 0.12, link.parent[2]],
                                 [link.child[0], 0.12, link.child[2]],
                               ]}
-                              color="#f4d793"
+                              color="#587b69"
                               lineWidth={2}
                             />
                           ))}
@@ -237,13 +241,18 @@ const Office = memo(
               }
               action={action}
               reduced={props.reducedMotion}
-              rows={rows}
               insets={props.insets}
               resetId={props.resetId}
             />
             <SceneFrames onLowFps={lowerQuality} animated={animated} />
           </Canvas>
         </div>
+        {overflow > 0 && (
+          <p className="office-capacity" role="status">
+            У 3D-офісі {seats.size} із {props.sessions.length} агентів. Ще{" "}
+            {overflow} — у списку «Агенти» та на таскборді.
+          </p>
+        )}
         <div className="camera-controls">
           <button
             aria-label="Наблизити"
