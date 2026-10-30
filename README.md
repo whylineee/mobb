@@ -4,7 +4,7 @@
 
 ## Запуск
 
-Потрібні **Node.js 24** і **pnpm 11**.
+Потрібні **Node.js 26** і **pnpm 11.25.0**.
 
 ```sh
 pnpm install --frozen-lockfile

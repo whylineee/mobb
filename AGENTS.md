@@ -80,7 +80,7 @@ test results.
 
 ## Validation
 
-Use Node.js 24 and the pnpm version pinned in `package.json`. Install dependencies
+Use Node.js 26 and the pnpm version pinned in `package.json`. Install dependencies
 with `pnpm install --frozen-lockfile`. Keep dependency changes reflected in
 `pnpm-lock.yaml`.
 

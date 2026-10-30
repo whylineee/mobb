@@ -10,7 +10,7 @@ const bundle = (entry: string, outfile: string, external = false) =>
     outfile: resolve(root, outfile),
     bundle: true,
     platform: "node",
-    target: "node24",
+    target: "node26",
     format: "esm",
     sourcemap: true,
     ...(external ? { packages: "external" as const } : {}),
